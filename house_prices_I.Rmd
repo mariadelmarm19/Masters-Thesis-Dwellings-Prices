@@ -1,5 +1,5 @@
 ---
-title: "TFM"
+title: "Master's Thesis"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
@@ -33,7 +33,7 @@ library(zoo) # date (quarters)
 # Times New Roman font import:
 library(extrafont)
 
-# Operations with geographic location
+# Operations with geodata
 library(geosphere)
 ```
 
@@ -473,7 +473,9 @@ idealista <- idealista18 %>%
                   garden, external), ~max(.)),
          across(c(price, built_area, price_sq_m, n_room, n_bath), round))
 
-idealista <- idealista %>% distinct(id, .keep_all = TRUE) %>% drop_na()
+sapply(idealista, function(x) sum(is.na(x))*100/nrow(idealista)) # % of NAs per row
+
+idealista <- idealista %>% distinct(id, .keep_all = TRUE) %>% drop_na() # drops rows with no information available about 'external'
 ```
 
 Classifying orientation:
@@ -515,30 +517,110 @@ Joining each dwelling with its corresponding neighbourhood.
 
 ```{r}
 madrid_idealista <- st_join(idealista, Madrid_Polygons, join = st_within)
+
 madrid_idealista <- madrid_idealista %>% 
   select(-c(LOCATIONID, ZONELEVELID)) %>% 
   rename(neighbourhood = LOCATIONNAME)
 ```
 
-Identification of two observations that contain an error in the number of rooms:
-
-- A10991866817670907438: price = 450000, n_rooms = 93
-- A8866129769871540210: price = 109000, n_rooms = 33
+To have in the same dataset geometry and separated longitude and latitude information.
 
 ```{r}
-madrid_idealista <- madrid_idealista %>% 
+madrid_idealista <- madrid_idealista %>%
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+Identification of observations that contain errors:
+
+- A10991866817670907438: price = 450000, n_rooms = 93 (wrong number of rooms)
+- A8866129769871540210: price = 109000, n_rooms = 33 (wrong number of rooms) 
+
+```{r}
+madrid_idealista %>% filter(n_room > 25)
+```
+
+- A7501251371917084834: long = - 2.753303, lat = 36.75639 (house located in Almería)
+
+```{r}
+madrid_idealista %>% filter(long > -3.50 & lat < 40.00)
+```
+
+Removing wrong observations.
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  filter(!(long > -3.50 & lat < 40.00)) %>%
   filter(!(price %in% c(450000, 109000) & n_room %in% c(93, 33)))
+```
+
+Check for NA percentage in each variable.
+
+```{r}
+sapply(madrid_idealista, function(x) sum(is.na(x))*100/nrow(madrid_idealista))
+```
+
+```{r}
+madrid_idealista %>% filter(is.na(neighbourhood)) %>% arrange(id)
+```
+
+After a deeper investigation it has been found that those remaining dwellings without neighbourhood information are
+located in the main streets or avenues which are located in the boundaries of two neighbourhoods.
+The best solution found has been to consult manually the location and assign a neighbourhood according to the part of
+the street where these houses are found. Despite this small detail, neighbourhood itself will not be as important for
+this study, the interest is mainly in the district, which is the same for the two neighbourhoods.
+Only dwellings from the three first quarters of the year will be handled because, as explained later, the analysis is
+only going to be considering this period.
+
+```{r}
+missing_n <- data.frame(madrid_idealista %>% 
+  filter(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
+                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
+                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
+                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
+                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
+                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
+                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
+                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
+                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
+                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
+                   "A13947664044826473945")) %>% 
+  mutate(neighbourhood = c("Legazpi", "Castilla", "Palomeras Bajas", "Piovera", "Pinar del Rey", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Casco Histórico de Vallecas", "Adelfas", "Ciudad Jardín", "Nueva España", "Nueva España", 
+                           "Ciudad Universitaria", "Valdebebas - Valdefuentes", "Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Alameda de Osuna", "Legazpi", "Estrella", "Valdeacederas", "Castillejos", 
+                           "Puerta del Ángel", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Arapiles", "Cuatro Caminos", "Buenavista", "Vinateros", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Delicias", "Peñagrande", "Valdebebas -Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Casco Histórico de Vallecas"))) %>% 
+  st_drop_geometry()
+
+missing_n
+
+madrid_idealista <- madrid_idealista %>% 
+  filter(!(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
+                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
+                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
+                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
+                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
+                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
+                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
+                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
+                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
+                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
+                   "A13947664044826473945"))) %>% 
+  st_drop_geometry()
+
+madrid_idealista <- madrid_idealista %>% bind_rows(missing_n) %>% select(-geometry)
 ```
 
 Cleaned idealista's data.
 
 ```{r}
 madrid_idealista
-```
-
-
-```{r}
-sapply(madrid_idealista, function(x) sum(is.na(x))*100/nrow(madrid_districts))
 ```
 
 ### 4.2.1. Euribor
@@ -549,7 +631,7 @@ regarding profile and device, so that the web being scraped is aware of who is d
 inconvenience they could be rapidly contacted with no further grievance.
 
 ```{r}
-set_config(user_agent("User Agent; Name Surname Surname (occupation or purpose) / email"))
+# set_config(user_agent("User Agent; Name Surname Surname (occupation or purpose) / email"))
 ```
 
 Scraping Euribor information.
@@ -650,18 +732,24 @@ Check for no duplicates in Airbnb data.
 sum(duplicated(airbnb$id))
 ```
 
+This database only cointains information up to the third quarter of the year 2018.
+
 ```{r}
-airbnb <- airbnb %>% 
-  select(id, longitude, latitude, found, revised, room_type, capacity) %>% rename(long = longitude, lat = latitude)
+min(airbnb$found)
+max(airbnb$found)
 ```
 
-Revised is the last time found the dwelling in the platform. We are only going to consider those from 01th of January of 2018.
+```{r}
+airbnb <- airbnb %>% 
+  select(id, longitude, latitude, found, revised, room_type, capacity) %>% 
+  rename(long = longitude, lat = latitude)
+```
+
+"Revised" is the last time found the dwelling in the platform. We are only going to consider those from 01th of January of 2018.
 
 ```{r}
 airbnb <- airbnb %>% 
   filter(revised >= as.Date("2018-01-01")) 
-
-airbnb
 ```
 
 Creating the geometry for each dwelling.
@@ -683,10 +771,9 @@ Those homes that have an NA in their LOCATION is because they are from the Commu
 ```{r}
 airbnb <- airbnb %>% 
   filter(!is.na(neighbourhood))
-
-airbnb %>% 
-  select(id, neighbourhood)
 ```
+
+Consult aggregated data by neighbourhood.
 
 ```{r}
 airbnb %>%
@@ -699,13 +786,13 @@ Separating houses in Airbnb by quarters (01 for the first, 02 for the second and
 
 ```{r}
 airbnb_q1 <- airbnb %>% 
-  filter(found < as.Date("2018-04-01")) # 11035
+  filter(found < as.Date("2018-04-01")) 
 
 airbnb_q2 <- airbnb %>% 
-  filter(found < as.Date("2018-07-01") & revised > as.Date("2018-03-30") & revised < as.Date("2018-07-01")) # 8465
+  filter(found < as.Date("2018-07-01") & revised > as.Date("2018-03-30") & revised < as.Date("2018-07-01")) 
 
 airbnb_q3 <- airbnb %>% 
-  filter(revised > as.Date("2018-06-30")) # 11590
+  filter(revised > as.Date("2018-06-30")) 
 ```
 
 Adding each dataset its corresponding quarter.
@@ -725,7 +812,11 @@ Reaching to the final aggregated Airbnb information by quarters.
 
 ```{r}
 airbnb_ag <- rbind(airbnb_q1, airbnb_q2, airbnb_q3)
+```
 
+There are Airbnb dwellings operating in more than one quarter of the year.
+
+```{r}
 sum(duplicated(airbnb_ag$id))
 ```
 
@@ -735,6 +826,8 @@ airbnb_final <- airbnb_ag %>%
   summarise(n_houses_airbnb = n(),
             n_places_airbnb = sum(capacity)) %>% 
   st_drop_geometry()
+
+airbnb_final
 ```
 
 Saving **airbnb_final** table.
@@ -743,14 +836,15 @@ Saving **airbnb_final** table.
 # write.csv(airbnb_final, file = "airbnb_final.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
 ```
 
-To have in the same dataset the geometry and the separated longitude and latitude information.
+To have in the same dataset geometry and separated longitude and latitude information.
 
 ```{r}
-madrid_idealista <- madrid_idealista %>%
+madrid_idealista <- st_as_sf(madrid_idealista, coords = c("long", "lat"), crs = 4326) %>% 
   mutate(long = st_coordinates(geometry)[, 1],
          lat = st_coordinates(geometry)[, 2])
 ```
 
+Neighbourhoods resulting in NA are because they do not have any Airbnb house surrounding.
 
 ```{r}
 madrid_idealista <- madrid_idealista %>% 
@@ -760,31 +854,48 @@ madrid_idealista <- madrid_idealista %>%
   # st_drop_geometry() %>% 
   full_join(airbnb_final, by = c("neighbourhood", "period"))
 
-sum(is.na(data$n_houses_airbnb))
-
-data %>% 
-  filter(is.na(neighbourhood))
+madrid_idealista <- madrid_idealista %>%
+  mutate(n_houses_airbnb = replace_na(n_houses_airbnb, 0),
+         n_places_airbnb = replace_na(n_places_airbnb, 0))
 ```
 
 ### 4.2.3. Parks and green areas
 
 ```{r message = FALSE}
-parks_raw <- read_delim("parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
+parks <- read_delim("parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
   select(c(NOMBRE, LATITUD, LONGITUD)) %>% 
   rename(name = NOMBRE, lat = LATITUD, long = LONGITUD)
 ```
 
-
 ```{r}
-parks <- st_as_sf(parks_raw, coords = c("long", "lat"), crs = 4326) %>% 
+parks <- st_as_sf(parks, coords = c("long", "lat"), crs = 4326) %>% 
   mutate(long = st_coordinates(geometry)[, 1],
          lat = st_coordinates(geometry)[, 2])
+data("Madrid_Polygons")
+Madrid_Polygons
 ```
 
 ```{r}
 madrid_idealista <- madrid_idealista %>%
   mutate(park_proximity = st_distance(., parks) %>% apply(1, min),
          park_proximity_km = park_proximity / 1000) %>% select(-park_proximity)
+```
+
+Aluche example distance calculation (to Parque Aluche)
+
+```{r}
+# A2589730015233487221 Aluche ~= coord park
+# A1827641402258800038 Aluche a bit further
+
+madrid_idealista %>% select(id, park_proximity_km) %>% filter(id == "A2589730015233487221" | id == "A1827641402258800038")
+```
+
+Opera example distance calculation (to Jardines de Sabatini)
+
+```{r}
+# A12651484524718559564 Opera (Palacio) near to Jardines de Sabatini
+# A16593819002392137683 Opera (Palacio) a bit further
+madrid_idealista %>% select(id, park_proximity_km) %>% filter(id == "A12651484524718559564" | id == "A16593819002392137683")
 ```
 
 ### 4.2.4. Educational centers
