@@ -54,7 +54,7 @@ Source: [INE](https://www.ine.es/jaxiT3/Datos.htm?t=25171)
 Reading raw data from .csv file.
 
 ```{r}
-dpi <- read_delim("dwelling_price_index_INE.csv", 
+dpi <- read_delim("Data/dwelling_price_index_INE.csv", 
                   delim = ";", 
                   skip = 1,
                   col_types = "c", 
@@ -102,7 +102,7 @@ so it can be used now in R.
 
 - Plot.
 
-```{r}
+```{r fig.height= 5, fig.width= 8}
 dpi_plot <- dpi %>% 
   ggplot(aes(y = DPI, x = Period, group = Group, color = Group)) + 
   geom_line(linewidth = 1.3) + 
@@ -148,7 +148,7 @@ Evolution of the average price per square meter by district and neighbourhood (C
 Full data:
 
 ```{r}
-madrid_m2 <- read_delim("price_m2_Madrid_district_neighbourhood.csv", 
+madrid_m2 <- read_delim("Data/price_m2_Madrid_district_neighbourhood.csv", 
                         delim = ";", 
                         skip = 5, 
                         n_max = 161, # to skip last 4 rows
@@ -230,7 +230,7 @@ madrid_districts
 [Geodata 21 districts from Madrid municipality](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=7d6e5eb0d73a7710VgnVCM2000001f4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default)
 
 ```{r}
-geodata_districts <- read_sf(dsn = ".", # "." means current directory
+geodata_districts <- read_sf(dsn = "./Data", # "." means current directory
   layer = "Geodata_Districts")
 
 geodata_districts <- geodata_districts %>% 
@@ -721,7 +721,7 @@ madrid_idealista <- madrid_idealista %>%
 [Datahippo Airbnb](https://datahippo.org/media/regions/4c7e35e4-46d3-4a82-baae-1a16d7d0ea48/599230508a46554e81f2887e_airbnb.csv)
 
 ```{r}
-airbnb <- read_csv("Airbnb_data.csv", show_col_types = FALSE)
+airbnb <- read_csv("Data/airbnb_data.csv", show_col_types = FALSE)
 
 airbnb
 ```
@@ -862,7 +862,7 @@ madrid_idealista <- madrid_idealista %>%
 ### 4.2.3. Parks and green areas
 
 ```{r message = FALSE}
-parks <- read_delim("parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
+parks <- read_delim("Data/parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
   select(c(NOMBRE, LATITUD, LONGITUD)) %>% 
   rename(name = NOMBRE, lat = LATITUD, long = LONGITUD)
 ```
@@ -903,7 +903,7 @@ madrid_idealista %>% select(id, park_proximity_km) %>% filter(id == "A1265148452
 [Educational centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=f14878a6d4556810VgnVCM1000001d4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
 
 ```{r message = FALSE}
-educational_centers <- read_delim("educational_centers.csv", delim = ";",
+educational_centers <- read_delim("Data/educational_centers.csv", delim = ";",
                                   show_col_types = FALSE) %>% 
   select(NOMBRE, LONGITUD, LATITUD) %>% 
   rename(name = NOMBRE, long = LONGITUD, lat = LATITUD) %>% 
@@ -929,7 +929,7 @@ madrid_idealista <- madrid_idealista %>%
 [Health centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=da7437ac37efb410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
 
 ```{r message = FALSE}
-health_centers <- read_delim("health_centers.csv", delim = ";", show_col_types = FALSE) %>% 
+health_centers <- read_delim("Data/health_centers.csv", delim = ";", show_col_types = FALSE) %>% 
   select(NOMBRE, LONGITUD, LATITUD) %>%
   rename(name = NOMBRE, long = LONGITUD, lat = LATITUD)
 ```
