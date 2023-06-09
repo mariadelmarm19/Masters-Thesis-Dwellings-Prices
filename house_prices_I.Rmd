@@ -55,10 +55,8 @@ Reading raw data from .csv file.
 
 ```{r}
 dpi <- read_delim("Data/dwelling_price_index_INE.csv", 
-                  delim = ";", 
-                  skip = 1,
-                  col_types = "c", 
-                  col_names = c("remove1", "Group", "remove2", "remove3", "Period", "DPI")) %>% 
+                  delim = ";", skip = 1, col_types = "c", 
+                  col_names = c("remove1", "Group", "remove2", "remove3", "Period", "DPI")) %>%
   select(-c("remove1", "remove2", "remove3"))
 
 head(dpi)
@@ -102,11 +100,11 @@ so it can be used now in R.
 
 - Plot.
 
-```{r fig.height= 5, fig.width= 8}
+```{r fig.height = 5, fig.width = 8.5}
 dpi_plot <- dpi %>% 
   ggplot(aes(y = DPI, x = Period, group = Group, color = Group)) + 
   geom_line(linewidth = 1.3) + 
-  labs(x = NULL, y = "DPI") +
+  labs(x = NULL, y = NULL) +
   theme(legend.title = element_blank(),
         legend.position = c(0.80, 0.20),
         legend.background = element_rect(color = "black", fill = "white"),
@@ -116,15 +114,16 @@ dpi_plot <- dpi %>%
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_rect(fill = "white"),
-        legend.spacing.y = unit(0.03, "cm"), # para poner bien la caja de la leyenda
-        #legend.margin = margin(t = 0),
-        text = element_text(family = "Times New Roman", size = 10, color = "black")) +
+        legend.spacing.y = unit(0.03, "cm"), # adjust legend box
+        legend.key = element_rect(fill = "transparent"),
+        text = element_text(family = "Times New Roman", size = 18, color = "black")) +
   scale_color_manual(values = c("darkblue", "red")) +
   geom_hline(yintercept = 0, 
              linetype = "dashed", 
              color = "black", linewidth = 0.5) +
-  scale_y_continuous(limits = c(-7.5, 7.5), breaks = seq(-7.5, 7.5, by = 3)) +
-  scale_x_yearqtr(format = "%Y", # format = "%YQ%q" para poner QX detrás de cada label
+  scale_y_continuous(limits = c(-7.5, 7.5), breaks = seq(-7.5, 7.5, by = 3),
+                     labels = function(x) paste0(x, "%")) + # Add "%" symbol to y-labels
+  scale_x_yearqtr(format = "%Y", # format = "%YQ%q" to put QX after each label
                   limits = c(min(dpi$Period), max(dpi$Period)),
                   breaks = seq(from = min(dpi$Period), to = max(dpi$Period), by = 1),
                   expand = c(0, 0.5)) +
@@ -135,12 +134,6 @@ dpi_plot <- dpi %>%
 dpi_plot
 ```
 
-Saving the plot in the same directory.
-
-```{r}
-# ggsave("dpi_plot.png", dpi = 300, width = 10, height = 6, units = "in", dpi_plot)
-```
-
 #### Data bank from Madrid Council - Statistical information
 
 Evolution of the average price per square meter by district and neighbourhood (City of Madrid)
@@ -149,71 +142,54 @@ Full data:
 
 ```{r}
 madrid_m2 <- read_delim("Data/price_m2_Madrid_district_neighbourhood.csv", 
-                        delim = ";", 
-                        skip = 5, 
-                        n_max = 161, # to skip last 4 rows
+                        delim = ";", skip = 5, 
+                        n_max = 161, # skip last 4 rows
                         col_names = c("District", "Neighbourhood", "2017", "2018", "2019", "2020", "2021", "2022"),
                         show_col_types = FALSE) %>% 
-  mutate(across(starts_with("20"), ~as.numeric(str_replace_all(., "\\.", "")))) # substitutes dots per nothing and converts to numeric
+  mutate(across(starts_with("20"), ~as.numeric(str_replace_all(., "\\.", "")))) # substitute dots per nothing and convert to numeric
 
 madrid_m2
 ```
 
-#### Plot 2: Madrid city
-
-Evolution of second-hand dwelling prices (€/m2) in Madrid City.
+#### Plot 2: Average price per square meter of second-hand dwellings by District in 2022 (€ per square meter) & Increase in price per square meter: 2017 vs. 2022, in %
 
 ```{r}
-madrid_city <- madrid_m2 %>% 
-  filter(Neighbourhood == "Ciudad de Madrid") %>% 
-  select(-"District")
+madrid_districts <- madrid_m2 %>%
+  filter(str_detect(Neighbourhood, '^\\d{2}\\.') | Neighbourhood == "Ciudad de Madrid") %>% # de la columna de neighbourhood que empiece por dos dígitos, seguido por un punto
+  rename("remove" = "District", "District" = "Neighbourhood") %>%
+  select(-"remove")
 
-madrid_city <- madrid_city %>%
-  pivot_longer(!Neighbourhood, names_to = "Year", values_to = "price per m2") %>%
-  mutate(Year = as.Date(paste0(Year, "-01-01"), format = "%Y-%m-%d"))
-
-madrid_city
+madrid_districts
 ```
 
-[Change background color panel](https://stackoverflow.com/questions/33322061/change-background-color-panel-based-on-year-in-ggplot-r)
-
-[Annotations](http://www.sthda.com/english/wiki/ggplot2-texts-add-text-annotations-to-a-graph-in-r-software)
+```{r}
+madrid_districts <- madrid_districts %>%
+  mutate(District = gsub("^\\d{2}\\.\\s*", "", District),
+         District = ifelse(District == "Ciudad de Madrid", "City of Madrid", District),
+         Variation = round(((`2022` - `2017`) / `2017`) * 100, 2))
+```
 
 ```{r}
-ggplot(madrid_city, aes(x = Year, y = `price per m2`, group = Neighbourhood)) +
-  ylim(3000, 4000) +
-  labs(title = NULL, x = NULL, y = NULL) +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
-  geom_line(linewidth = 0.8) +
-  geom_point(shape = 16) +
-  geom_text(aes(label = `price per m2`, vjust = -1.5), 
-            family = "Times New Roman") +
-  theme(axis.text.y = element_blank(),
-        axis.title.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color = "black"),
-        panel.background = element_rect(fill = "white")) +
-  geom_segment(aes(x = Year, xend = Year, y = 3000, yend = `price per m2`), color = "grey") +
-  annotate(geom = "text", x = as.Date("2017-06-30"), 
-           y = 3100, label = "+17.02%", color = "red", 
-           fontface = "bold", alpha = 0.7, 
-           family = "Times New Roman", size = 6) +
-  annotate(geom = "text", x = as.Date("2018-06-30"), 
-           y = 3100, label = "-2.91%", color = "darkgreen", 
-           fontface = "bold", alpha = 0.8, 
-           family = "Times New Roman", size = 6) +
-  annotate(geom = "text", x = as.Date("2019-06-30"), 
-           y = 3100, label = "-1.36%", color = "darkgreen", 
-           fontface = "bold", alpha = 0.8, 
-           family = "Times New Roman", size = 6) +
-  annotate(geom = "text", x = as.Date("2020-06-30"),
-           y = 3100, label = "+0.49%", color = "red", 
-           fontface = "bold", alpha = 0.7, 
-           family = "Times New Roman", size = 6) +
-  annotate(geom = "text", x = as.Date("2021-06-30"), 
-           y = 3100, label = "+6.07%", color = "red", 
-           fontface = "bold", alpha = 0.7, 
-           family = "Times New Roman", size = 6)
+madrid_longer <- madrid_districts %>%
+  pivot_longer(!District, names_to = c("Year"), values_to = "price per m2")
+
+madrid_longer
+```
+
+```{r fig.height = 5, fig.width = 8.5}
+madrid_longer %>%
+  filter(Year == "2022") %>%
+  ggplot(aes(x = reorder(District, `price per m2`), y = `price per m2`)) +
+  labs(x = NULL, y = NULL) +
+  geom_bar(stat = "identity", fill = "darkblue") +
+  coord_flip() +
+  geom_rect(xmin = -Inf, xmax = Inf, ymin = 6900, ymax = 7900, fill = "lightblue") +
+  geom_text(aes(label = `price per m2`), hjust = 1.1, nudge_x = 0.1, color = "white", family = "Times New Roman", size = 5, fontface = "bold") +
+  scale_y_continuous(limits = c(0, 7900), expand = c(0, 0), breaks = NULL) +
+  geom_text(data = madrid_longer %>% filter(Year == "Variation"), aes(x = District, y = 7400, label = paste0(`price per m2`, "%")), vjust = 0.35, family = "Times New Roman", size = 5, fontface = "bold") +
+  theme_minimal() +
+  theme(text = element_text(family = "Times New Roman", size = 20),
+        axis.text.y = element_text(vjust = 0.35, color = "black")) # Manejar la altura de los distritos con respecto a las barras
 ```
 
 #### Plot 3: Average price per sq meter of Districts in Madrid
