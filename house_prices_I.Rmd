@@ -206,7 +206,7 @@ madrid_districts
 [Geodata 21 districts from Madrid municipality](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=7d6e5eb0d73a7710VgnVCM2000001f4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default)
 
 ```{r}
-geodata_districts <- read_sf(dsn = "./Data", # "." means current directory
+geodata_districts <- read_sf(dsn = "./Data", # "." = current directory
   layer = "Geodata_Districts")
 
 geodata_districts <- geodata_districts %>% 
@@ -942,6 +942,8 @@ Saving the final dataset into a .csv
 
 ## 5. Exploratory data analysis
 
+This section dedicated to exploring duplications in data. 
+
 Dataset with houses repeated more than once (including all rows).
 
 ```{r}
@@ -1000,17 +1002,19 @@ sum(is.na(variations$price_variation))
 mean(variations$price_variation)
 ```
 
-Orientation
+Orientation: dwellings with no location.
 
 ```{r}
 exploratory
 ```
 
+Mean antiquity of buildings with no orientation is more than 55 years. 
+
 ```{r}
 exploratory_orientation <- exploratory %>% 
   group_by(id) %>% 
   filter(orientation == "None") %>% 
-  slice(1)
+  slice(1) # select the first row that satisfies the condition
  
 mean(exploratory_orientation$year_built)
 ```
