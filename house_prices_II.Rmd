@@ -1,0 +1,224 @@
+---
+title: "TFM"
+author: "Maria del Mar Escalas Martorell"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r message = FALSE, warning = FALSE}
+# General libraries:
+library(tidyverse)
+
+# Libraries for editing plots and tables:
+library(ggplot2)
+
+# Libraries for modelling
+library(caret)
+library(olsrr)
+```
+
+## 4. Modelling
+
+### Reading data into R and re-check for no NAs
+
+```{r}
+data <- read_csv("madrid_idealista.csv", show_col_types = FALSE) %>%
+  mutate(across(c(terrace, lift, air_cond, parking, boxroom, wardrobe,pool, doorman, garden, external), as.factor))
+
+sapply(data, function(x) sum(is.na(x))*100/nrow(data)) # % of NAs per row
+```
+
+### Exploratory data analysis
+
+```{r}
+dim(data) # rows and columns
+```
+
+```{r}
+summary(data)
+```
+
+Distribution of the target variable *price_sq_m*.
+
+```{r}
+data %>% 
+  ggplot(aes(x=price)) + 
+  geom_density(fill="navyblue") + 
+  theme_minimal()
+```
+
+Log-transformation of the target variable *price_sq_m*.
+
+```{r}
+data %>% 
+  ggplot(aes(x=price)) + 
+  geom_density(fill="navyblue") + 
+  scale_x_log10() + 
+  theme_minimal()
+```
+
+### Splitting data into training and testing sets
+
+```{r}
+set.seed(1999)
+in_train <- createDataPartition(data$price_sq_m, p = 0.75, list = FALSE)  # 75% for training
+training <- data[ in_train,]
+testing <- data[-in_train,]
+```
+
+
+### Modelling
+
+```{r}
+variables1 <- log(price_sq_m) ~ n_room + n_bath + terrace + lift + air_cond + parking + boxroom + wardrobe + pool + doorman +
+  garden + external + year_built + floors + n_dwelling + km_to_center + metro_proximity + orientation +
+  average_euribor + long + lat + n_houses_airbnb + n_places_airbnb + park_proximity + educ_center_proximity + health_center_proximity
+```
+
+Creating a dataframe to store the different results from the different models tried.
+
+```{r}
+results <- data.frame(price_sq_m = log(testing$price_sq_m))
+```
+
+Incorporating five-fold cross validation technique.
+
+```{r}
+ctrl <- trainControl(method = "repeatedcv", 
+                     number = 5, repeats = 1)
+```
+
+#### Linear regression
+
+```{r}
+linear_cv <- train(variables1, 
+                    data = training,
+                    method = "lm",
+                    preProc = c('scale', 'center'),
+                    trControl = ctrl)
+linear_cv
+```
+
+```{r}
+summary(linear_cv)
+```
+
+Prediction - linear
+
+```{r}
+results$lm <- predict(linear_cv, testing)
+postResample(pred = results$lm,  obs = results$price)
+```
+
+```{r}
+ggplot(data = results, aes(x = lm, y = price_sq_m)) +
+  geom_point(data = subset(results, lm > 0)) +
+  labs(title = "Linear Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
+  geom_abline(intercept = 0, slope = 1, colour = "blue") +
+  theme_bw()
+```
+
+#### KNN
+
+```{r}
+knn <- train(variables1, 
+             data = training,
+             method = "kknn", # k-Nearest Neighbors algorithm
+             preProc=c('scale','center'), # all variables in the same scale and mean = 0
+             tuneGrid = data.frame(kmax=c(6,13,15,19,21),distance=2,kernel='optimal'), # kmax = maximum value of k to be considered in the k - Nearest Neighbors algorithm Change 11 by 6
+             # Distance = 2 = Euclidean Distance
+             trControl = ctrl,
+             importance = TRUE)
+plot(knn)
+```
+
+```{r}
+results$knn <- predict(knn, testing)
+postResample(pred = results$knn,  obs = results$price_sq_m)
+```
+
+#### Random Forest
+
+```{r}
+rforest <- train(variables1, 
+                 data = training,
+                 method = "rf",
+                 preProc=c('scale','center'),
+                 trControl = ctrl,
+                 ntree = 100,
+                 tuneGrid = data.frame(mtry=c(1,9,18,27)), # esto es lo de randomly selected predictors, en nuestro caso podría ser c(1, 9, 18, 27) había 1, 3, 5, 7
+                 importance = TRUE) # variable importance measures to be computed
+
+plot(rforest)
+```
+
+```{r}
+results$rforest <- predict(rforest, testing)
+postResample(pred = results$rforest,  obs = results$price_sq_m)
+varImp(rforest)
+```
+
+```{r}
+ggplot(data = results, aes(x = rforest, y = price_sq_m)) +
+  geom_point(data = subset(results, lm > 0)) +
+  labs(title = "Forward Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
+  geom_abline(intercept = 0, slope = 1, colour = "blue") +
+  theme_bw()
+```
+
+#### Gradient Boosting
+
+```{r}
+xboost <- train(variables1, 
+                  data = training,
+                  method = "xgbTree",
+                  preProc=c('scale','center'),
+                  trControl = ctrl,
+                  tuneGrid = expand.grid(nrounds = c(500,700), 
+                                         max_depth = c(5,6,7), 
+                                         eta = c(0.01, 0.1, 1),
+                                         gamma = c(1, 2, 3), 
+                                         colsample_bytree = c(0.5, 1), # change this by = c(0.5, 1)
+                                         min_child_weight = c(1), 
+                                         subsample = c(0.2,0.5,0.8)))
+```
+
+```{r}
+results$xboost <- predict(xboost, testing)
+postResample(pred = results$xboost,  obs = results$price_sq_m)
+```
+
+Trial SHAP values
+
+```{r}
+# shap_values_xboost <- predict(xboost, testing, predcontrib = TRUE, approxcontrib = FALSE)
+```
+
+[Find the most important variables in R-Programming](https://medium.com/@amitjain2110/how-to-find-the-most-important-variables-in-r-programming-65be0252d7ba)
+
+```{r}
+library(varImp)
+```
+
+```{r}
+varImp(rforest, conditional = TRUE)
+varImp(xboost)
+```
+
+#### Trial: Neural Networks
+
+```{r}
+# neural_networks <- train(variables1, 
+#                  data = training,
+#                  method = "neuralnet",
+#                  preProc=c('scale','center'),
+#                  trControl = ctrl,
+#                  tuneGrid = expand.grid(layer1 = c(4, 2),
+#                                         layer2 = c(2, 1, 0),
+#                                         layer3 = c(0)))
+```
+
+
+
+
+
