@@ -9,8 +9,13 @@ output: html_document
 # General libraries:
 library(tidyverse)
 
+# Times New Roman:
+library(extrafont)
+
 # Libraries for editing plots and tables:
 library(ggplot2)
+library(ggpubr) # to arrange plots
+library(corrplot) # correlation plot
 
 # Libraries for modelling
 library(caret)
@@ -40,21 +45,50 @@ summary(data)
 
 Distribution of the target variable *price_sq_m*.
 
-```{r}
-data %>% 
-  ggplot(aes(x=price)) + 
+```{r fig.height = 2.5, fig.width = 3}
+p1 <- data %>% 
+  ggplot(aes(x=price_sq_m)) + 
   geom_density(fill="navyblue") + 
-  theme_minimal()
+  theme_minimal() +
+  theme(text = element_text(family = "Times New Roman"))
+p1
 ```
 
 Log-transformation of the target variable *price_sq_m*.
 
-```{r}
-data %>% 
-  ggplot(aes(x=price)) + 
+```{r fig.height = 2.5, fig.width = 3}
+p2 <- data %>% 
+  ggplot(aes(x=price_sq_m)) + 
   geom_density(fill="navyblue") + 
   scale_x_log10() + 
-  theme_minimal()
+  theme_minimal() +
+  theme(text = element_text(family = "Times New Roman"))
+p2
+```
+
+```{r fig.height = 2.5, fig.width = 6}
+ggarrange(p1, p2)
+```
+
+Plot of correlations between numeric variables
+
+```{r}
+numeric_corrplot <- data %>% select(n_room, n_bath, year_built, floors, n_dwelling, km_to_center, metro_proximity, average_euribor, long, lat, n_houses_airbnb, n_places_airbnb, park_proximity, educ_center_proximity, health_center_proximity)
+```
+
+```{r fig.height = 7, fig.width = 7}
+corrplot(cor(numeric_corrplot),
+         method = "color",
+         type = "upper",
+         order = "hclust",
+         addCoef.col = "black",
+         tl.col = "black",
+         number.cex = 0.8,
+         tl.cex = 0.7,
+         tl.srt = 45,
+         family = "Times New Roman",
+         number.font = 6, # Times New Roman for numbers inside the plot
+         cl.pos="n") # No legend
 ```
 
 ### Splitting data into training and testing sets
@@ -196,13 +230,15 @@ Trial SHAP values
 
 [Find the most important variables in R-Programming](https://medium.com/@amitjain2110/how-to-find-the-most-important-variables-in-r-programming-65be0252d7ba)
 
-```{r}
+```{r warning = FALSE}
 library(varImp)
 ```
 
 ```{r}
+knn
+varImp(knn)
 varImp(rforest, conditional = TRUE)
-varImp(xboost)
+varImp(xboost) # Error in varImp(xboost) : trying to get slot "responses" from an object (class "train") that is not an S4 object
 ```
 
 #### Trial: Neural Networks
@@ -218,6 +254,34 @@ varImp(xboost)
 #                                         layer3 = c(0)))
 ```
 
+
+#### Trial: SHAP RandomF Forest
+
+```{r}
+# install.packages("SHAPforxgboost")
+library(SHAPforxgboost)
+```
+
+[SHAP](https://www.r-bloggers.com/2021/06/shap-analysis-in-9-lines/)
+
+```{r}
+# Step 1: Select some observations
+X <- data.matrix(data[sample(nrow(data), 1000), c("n_room", "n_bath", "terrace", "lift", "air_cond", "parking", "boxroom", "wardrobe", "pool", "doorman", "garden", "external", "year_built", "floors", "n_dwelling", "km_to_center", "metro_proximity", "orientation", "average_euribor", "long", "lat", "n_houses_airbnb", "n_places_airbnb", "park_proximity", "educ_center_proximity", "health_center_proximity")])
+
+# Step 2: Crunch SHAP values
+shap <- shap.prep(xboost, X_train = data) # Warning: variable ... is not a factor
+
+# Step 3: SHAP importance
+shap.plot.summary(shap)
+
+# Step 4: Loop over dependence plots in decreasing importance
+for (v in shap.importance(shap, names_only = TRUE)) {
+  p <- shap.plot.dependence(shap, v, color_feature = "auto", 
+                            alpha = 0.5, jitter_width = 0.1) +
+    ggtitle(v)
+  print(p)
+}
+```
 
 
 
