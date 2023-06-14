@@ -3,284 +3,810 @@ title: "TFM"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
+description: "This is the second .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document ***** that can be found in this repository. This markdown contains the code needed for conducting the analysis of point 3. DATA EXTRACTION AND PREPROCESSING."
 ---
 
-```{r message = FALSE, warning = FALSE}
-# General libraries:
-library(tidyverse)
+## 3. DATA EXTRACTION AND PREPROCESSING
 
-# Times New Roman:
-library(extrafont)
+### 3.1. Dwellings' characteristics data
 
-# Libraries for editing plots and tables:
-library(ggplot2)
-library(ggpubr) # to arrange plots
-library(corrplot) # correlation plot
+#### 3.1.1. Idealista (2023)
 
-# Libraries for modelling
-library(caret)
-library(olsrr)
-```
+Read personal private credentials (hidden).
 
-## 4. Modelling
-
-### Reading data into R and re-check for no NAs
+User's personal credentials are provided by API's host. It is shown how they should be loaded in R from a
+hidden location in the computer. In this case, credentials are stored in a separated folder (not included in the data
+available). Instead of using this directory, the person who wishes to reproduce this code should introduce its own
+credentials. If the study is not going to be public, no hidden data is needed so, instead, consumer apikey and secret
+can be loaded itself.
 
 ```{r}
-data <- read_csv("madrid_idealista.csv", show_col_types = FALSE) %>%
-  mutate(across(c(terrace, lift, air_cond, parking, boxroom, wardrobe,pool, doorman, garden, external), as.factor))
-
-sapply(data, function(x) sum(is.na(x))*100/nrow(data)) # % of NAs per row
+# consumer_apikey <- readLines("../Secret/consumer_apikey.txt")
+# consumer_secret <- readLines("../Secret/consumer_secret.txt")
+# api_key_secret <- paste0(consumer_apikey, ":", consumer_secret)
 ```
 
-### Exploratory data analysis
+Using basic authentication.
 
 ```{r}
-dim(data) # rows and columns
+# secret <- base64_enc(api_key_secret)
+# 
+# req <- httr::POST("https://api.idealista.com/oauth/token",
+#        httr::add_headers(
+#          "Authorization" = paste("Basic", secret, sep = " "),
+#          "Content-Type" = "application/x-www-form-urlencoded;charset=utf-8"
+#             ),
+#        body = "grant_type=client_credentials&scope=read"
+#             ) 
+# 
+# token <- paste("Bearer", httr::content(req)$access_token)
+```
+
+Establishing the desired parameters to search.
+
+```{r}
+# site = "https://api.idealista.com/3.5/es/search?"
+# loc = "center="
+# x = 40.40691
+# y = -3.70958
+# country = "&country=es"
+# maxItems = "&maxItems=50"
+# pages = "&numPage=1"
+# dist = "&distance="
+# distance = 1000
+# property = "&propertyType="
+# type = "homes"
+# operation = "&operation="
+# op = "sale"
+# chalet = "&chalet=0"
+```
+
+Building the url.
+
+```{r}
+# url1 <- paste(site, loc, x, ',', y, country, maxItems, pages, dist, distance, 
+#              property, type, operation, op, sep = "")
+```
+
+Requesting the information through Idealista's API.
+
+```{r}
+# res1 <- httr::POST(url1, httr::add_headers("Authorization" = token))
+```
+
+Extracting the JSON content.
+
+```{r}
+# cont_raw2 <- httr::content(res1)
+```
+
+
+#### 3.1.2. Idealista (2018)
+
+Database from Idealista (private online Real Estate portal).
+
+```{r}
+# devtools::install_github("paezha/idealista18")
+library(idealista18)
+```
+
+Data from Madrid 2018.
+
+[idealista18](https://paezha.github.io/idealista18/)
+
+```{r}
+data("Madrid_Sale")
+class(Madrid_Sale)
+```
+
+Initial selection: from 42 variables to 30.
+
+```{r}
+idealista18 <- Madrid_Sale %>% 
+  select(ASSETID, PERIOD, PRICE, CONSTRUCTEDAREA, UNITPRICE, ROOMNUMBER, 
+         BATHNUMBER, HASTERRACE, HASLIFT, HASAIRCONDITIONING,
+         ISPARKINGSPACEINCLUDEDINPRICE, HASNORTHORIENTATION, 
+         HASSOUTHORIENTATION, HASEASTORIENTATION, HASWESTORIENTATION, 
+         HASBOXROOM, HASWARDROBE, HASSWIMMINGPOOL, HASDOORMAN, HASGARDEN, 
+         FLATLOCATIONID, CADCONSTRUCTIONYEAR, CADMAXBUILDINGFLOOR, 
+         CADDWELLINGCOUNT, DISTANCE_TO_CITY_CENTER, DISTANCE_TO_METRO, 
+         LONGITUDE, LATITUDE) %>% 
+  rename(id = ASSETID, period = PERIOD, price = PRICE,
+         built_area = CONSTRUCTEDAREA, price_sq_m = UNITPRICE,
+         n_room = ROOMNUMBER, n_bath = BATHNUMBER, terrace = HASTERRACE,
+         lift = HASLIFT, air_cond = HASAIRCONDITIONING,
+         parking = ISPARKINGSPACEINCLUDEDINPRICE,
+         north_orientation = HASNORTHORIENTATION,
+         south_orientation = HASSOUTHORIENTATION, 
+         east_orientation = HASEASTORIENTATION,
+         west_orientation = HASWESTORIENTATION, boxroom = HASBOXROOM,
+         wardrobe = HASWARDROBE, pool = HASSWIMMINGPOOL, 
+         doorman = HASDOORMAN, garden = HASGARDEN,
+         external = FLATLOCATIONID, year_built = CADCONSTRUCTIONYEAR,
+         floors = CADMAXBUILDINGFLOOR, n_dwelling = CADDWELLINGCOUNT,
+         km_to_center = DISTANCE_TO_CITY_CENTER,
+         metro_proximity = DISTANCE_TO_METRO, long = LONGITUDE, lat = LATITUDE)
+```
+
+Issues with raw data:
+
+- There is a difference between unique row number and the total number of rows.
+
+```{r}
+nrow(idealista18) - length(unique(idealista18$id))
+```
+
+- Many dwellings without orientation.
+
+```{r}
+idealista18 %>% filter(north_orientation == 0 & south_orientation == 0 & east_orientation == 0 & west_orientation == 0)
+```
+
+Dropping geometry to make operations.
+
+```{r}
+idealista18 <- st_drop_geometry(idealista18)
+```
+
+Recoding of external. If "yes" = 1, if "no" = 0.
+
+```{r}
+idealista18 <- idealista18 %>% 
+  mutate(external = case_when(external == 2 ~ 0,
+                              external == 1 ~ 1,
+                              is.na(external) ~ NA_real_))
+```
+
+Operations:
+
+- Max for logical variables (in numeric format)
+- Average for numerical (continuous) variables
+
+```{r}
+idealista <- idealista18 %>% 
+  group_by(id) %>% 
+  mutate(across(c(period, price, built_area, n_room, n_bath, 
+                  year_built, floors, n_dwelling, 
+                  km_to_center, metro_proximity, long, lat), mean),
+         across(c(terrace, lift, air_cond, parking, 
+                  north_orientation, south_orientation, east_orientation, 
+                  west_orientation, boxroom, wardrobe, pool, doorman, 
+                  garden, external), ~max(.)),
+         across(c(price, built_area, price_sq_m, n_room, n_bath), round))
+
+sapply(idealista, function(x) sum(is.na(x))*100/nrow(idealista)) # % of NAs per row
+
+idealista <- idealista %>% distinct(id, .keep_all = TRUE) %>% drop_na() # drops rows with no information available about 'external'
+```
+
+Classifying orientation:
+
+```{r}
+idealista <- idealista %>% 
+  mutate(orientation = as_factor(case_when(
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "None",
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "Low", # north
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # west
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # east
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # east-west
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # north-west
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # north-east
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # north-east-west
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-west
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-east
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south-north
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Good", # south-east-west
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-north-east
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-north-west
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Full")),
+         period = case_when(period == 201803 ~ "20181",
+                            period == 201806 ~ "20182",
+                            period == 201809 ~ "20183",
+                            period == 201812 ~ "20184"),
+         period = as.yearqtr(format(period), "%Y%q")) %>% 
+  select(-c(north_orientation, south_orientation, east_orientation, west_orientation))
+```
+
+Reconverting the dataframe into a geometry object.
+
+```{r}
+idealista <- st_as_sf(idealista, coords = c("long", "lat"), crs = 4326)
+```
+
+Joining each dwelling with its corresponding neighbourhood. 
+
+```{r}
+madrid_idealista <- st_join(idealista, Madrid_Polygons, join = st_within)
+
+madrid_idealista <- madrid_idealista %>% 
+  select(-c(LOCATIONID, ZONELEVELID)) %>% 
+  rename(neighbourhood = LOCATIONNAME)
+```
+
+To have in the same dataset geometry and separated longitude and latitude information.
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+Identification of observations that contain errors:
+
+- A10991866817670907438: price = 450000, n_rooms = 93 (wrong number of rooms)
+- A8866129769871540210: price = 109000, n_rooms = 33 (wrong number of rooms) 
+
+```{r}
+madrid_idealista %>% filter(n_room > 25)
+```
+
+- A7501251371917084834: long = - 2.753303, lat = 36.75639 (house located in Almería)
+
+```{r}
+madrid_idealista %>% filter(long > -3.50 & lat < 40.00)
+```
+
+Removing wrong observations.
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  filter(!(long > -3.50 & lat < 40.00)) %>%
+  filter(!(price %in% c(450000, 109000) & n_room %in% c(93, 33)))
+```
+
+Check for NA percentage in each variable.
+
+```{r}
+sapply(madrid_idealista, function(x) sum(is.na(x))*100/nrow(madrid_idealista))
 ```
 
 ```{r}
-summary(data)
+madrid_idealista %>% filter(is.na(neighbourhood)) %>% arrange(id)
 ```
 
-Distribution of the target variable *price_sq_m*.
-
-```{r fig.height = 2.5, fig.width = 3}
-p1 <- data %>% 
-  ggplot(aes(x=price_sq_m)) + 
-  geom_density(fill="navyblue") + 
-  theme_minimal() +
-  theme(text = element_text(family = "Times New Roman"))
-p1
-```
-
-Log-transformation of the target variable *price_sq_m*.
-
-```{r fig.height = 2.5, fig.width = 3}
-p2 <- data %>% 
-  ggplot(aes(x=price_sq_m)) + 
-  geom_density(fill="navyblue") + 
-  scale_x_log10() + 
-  theme_minimal() +
-  theme(text = element_text(family = "Times New Roman"))
-p2
-```
-
-```{r fig.height = 2.5, fig.width = 6}
-ggarrange(p1, p2)
-```
-
-Plot of correlations between numeric variables
+After a deeper investigation it has been found that those remaining dwellings without neighbourhood information are
+located in the main streets or avenues which are located in the boundaries of two neighbourhoods.
+The best solution found has been to consult manually the location and assign a neighbourhood according to the part of
+the street where these houses are found. Despite this small detail, neighbourhood itself will not be as important for
+this study, the interest is mainly in the district, which is the same for the two neighbourhoods.
+Only dwellings from the three first quarters of the year will be handled because, as explained later, the analysis is
+only going to be considering this period.
 
 ```{r}
-numeric_corrplot <- data %>% select(n_room, n_bath, year_built, floors, n_dwelling, km_to_center, metro_proximity, average_euribor, long, lat, n_houses_airbnb, n_places_airbnb, park_proximity, educ_center_proximity, health_center_proximity)
+missing_n <- data.frame(madrid_idealista %>% 
+  filter(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
+                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
+                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
+                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
+                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
+                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
+                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
+                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
+                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
+                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
+                   "A13947664044826473945")) %>% 
+  mutate(neighbourhood = c("Legazpi", "Castilla", "Palomeras Bajas", "Piovera", "Pinar del Rey", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Casco Histórico de Vallecas", "Adelfas", "Ciudad Jardín", "Nueva España", "Nueva España", 
+                           "Ciudad Universitaria", "Valdebebas - Valdefuentes", "Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Alameda de Osuna", "Legazpi", "Estrella", "Valdeacederas", "Castillejos", 
+                           "Puerta del Ángel", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Arapiles", "Cuatro Caminos", "Buenavista", "Vinateros", 
+                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Delicias", "Peñagrande", "Valdebebas -Valdefuentes", "Valdebebas - Valdefuentes", 
+                           "Valdebebas - Valdefuentes", "Casco Histórico de Vallecas"))) %>% 
+  st_drop_geometry()
+
+missing_n
+
+madrid_idealista <- madrid_idealista %>% 
+  filter(!(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
+                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
+                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
+                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
+                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
+                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
+                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
+                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
+                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
+                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
+                   "A13947664044826473945"))) %>% 
+  st_drop_geometry()
+
+madrid_idealista <- madrid_idealista %>% bind_rows(missing_n) %>% select(-geometry)
 ```
 
-```{r fig.height = 7, fig.width = 7}
-corrplot(cor(numeric_corrplot),
-         method = "color",
-         type = "upper",
-         order = "hclust",
-         addCoef.col = "black",
-         tl.col = "black",
-         number.cex = 0.8,
-         tl.cex = 0.7,
-         tl.srt = 45,
-         family = "Times New Roman",
-         number.font = 6, # Times New Roman for numbers inside the plot
-         cl.pos="n") # No legend
-```
-
-### Splitting data into training and testing sets
+Cleaned idealista's data.
 
 ```{r}
-set.seed(1999)
-in_train <- createDataPartition(data$price_sq_m, p = 0.75, list = FALSE)  # 75% for training
-training <- data[ in_train,]
-testing <- data[-in_train,]
+madrid_idealista
 ```
 
+### 3.2. Other external data
 
-### Modelling
+#### 3.2.1. Euribor
+
+Identification of my user agent.
+This step is not compulsory/required to scrap, but is highly recommended. Each user should introduce their information
+regarding profile and device, so that the web being scraped is aware of who is doing so and if the user is causing any
+inconvenience they could be rapidly contacted with no further grievance.
 
 ```{r}
-variables1 <- log(price_sq_m) ~ n_room + n_bath + terrace + lift + air_cond + parking + boxroom + wardrobe + pool + doorman +
-  garden + external + year_built + floors + n_dwelling + km_to_center + metro_proximity + orientation +
-  average_euribor + long + lat + n_houses_airbnb + n_places_airbnb + park_proximity + educ_center_proximity + health_center_proximity
+# set_config(user_agent("User Agent; Name Surname Surname (occupation or purpose) / email"))
 ```
 
-Creating a dataframe to store the different results from the different models tried.
+Scraping Euribor information.
+
+[Expansión/Datosmacro.com](https://datosmacro.expansion.com/hipotecas/euribor?anio=2018)
+
+Reading the website into R.
 
 ```{r}
-results <- data.frame(price_sq_m = log(testing$price_sq_m))
+link_euribor <- "https://datosmacro.expansion.com/hipotecas/euribor?anio=2018"
+html_website <- link_euribor %>% read_html()
+html_website
 ```
 
-Incorporating five-fold cross validation technique.
+Selecting the desired table.
 
 ```{r}
-ctrl <- trainControl(method = "repeatedcv", 
-                     number = 5, repeats = 1)
+euribor18 <- html_website %>%
+  html_table() %>% 
+  .[[3]]
+
+euribor18
 ```
 
-#### Linear regression
+Handling needed data.
 
 ```{r}
-linear_cv <- train(variables1, 
-                    data = training,
-                    method = "lm",
-                    preProc = c('scale', 'center'),
-                    trControl = ctrl)
-linear_cv
-```
+euribor18 <- euribor18 %>% 
+  select(Fecha, Tipo) %>% 
+  rename(month_sp = Fecha, value = Tipo) %>% 
+  slice(1:(nrow(euribor18) - 1)) # removing last row
 
-```{r}
-summary(linear_cv)
-```
-
-Prediction - linear
-
-```{r}
-results$lm <- predict(linear_cv, testing)
-postResample(pred = results$lm,  obs = results$price)
-```
-
-```{r}
-ggplot(data = results, aes(x = lm, y = price_sq_m)) +
-  geom_point(data = subset(results, lm > 0)) +
-  labs(title = "Linear Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
-  geom_abline(intercept = 0, slope = 1, colour = "blue") +
-  theme_bw()
-```
-
-#### KNN
-
-```{r}
-knn <- train(variables1, 
-             data = training,
-             method = "kknn", # k-Nearest Neighbors algorithm
-             preProc=c('scale','center'), # all variables in the same scale and mean = 0
-             tuneGrid = data.frame(kmax=c(6,13,15,19,21),distance=2,kernel='optimal'), # kmax = maximum value of k to be considered in the k - Nearest Neighbors algorithm Change 11 by 6
-             # Distance = 2 = Euclidean Distance
-             trControl = ctrl,
-             importance = TRUE)
-plot(knn)
-```
-
-```{r}
-results$knn <- predict(knn, testing)
-postResample(pred = results$knn,  obs = results$price_sq_m)
-```
-
-#### Random Forest
-
-```{r}
-rforest <- train(variables1, 
-                 data = training,
-                 method = "rf",
-                 preProc=c('scale','center'),
-                 trControl = ctrl,
-                 ntree = 100,
-                 tuneGrid = data.frame(mtry=c(1,9,18,27)), # esto es lo de randomly selected predictors, en nuestro caso podría ser c(1, 9, 18, 27) había 1, 3, 5, 7
-                 importance = TRUE) # variable importance measures to be computed
-
-plot(rforest)
+euribor18 <- euribor18 %>%
+  mutate(month_sp = str_replace_all(month_sp, " 2018", ""), # eliminating "2018" from each row
+         value = str_replace_all(value, ",", ".")) %>% 
+  mutate(month = case_when(
+    month_sp == "Enero" ~ "January",
+    month_sp == "Febrero" ~ "February",
+    month_sp == "Marzo" ~ "March",
+    month_sp == "Abril" ~ "April",
+    month_sp == "Mayo" ~ "May",
+    month_sp == "Junio" ~ "June",
+    month_sp == "Julio" ~ "July",
+    month_sp == "Agosto" ~ "August",
+    month_sp == "Septiembre" ~ "September",
+    month_sp == "Octubre" ~ "October",
+    month_sp == "Noviembre" ~ "November",
+    month_sp == "Diciembre" ~ "December",
+    TRUE ~ NA_character_
+  )) %>% 
+  select(month, value, -month_sp)
 ```
 
 ```{r}
-results$rforest <- predict(rforest, testing)
-postResample(pred = results$rforest,  obs = results$price_sq_m)
-varImp(rforest)
+euribor18_q <- euribor18 %>% 
+  mutate(period = case_when(
+    month %in% c("December", "November", "October") ~ "20184",
+    month %in% c("September", "August", "July") ~ "20183",
+    month %in% c("June", "May", "April") ~ "20182",
+    month %in% c("March", "February", "January") ~ "20181"),
+         period = as.yearqtr(format(period), "%Y%q"),
+         value = str_replace_all(value, "%", ""),
+         value = as.numeric(value)
+    )
+
+euribor18_q <- euribor18_q %>%
+  select(period, value) %>% 
+  group_by(period) %>%
+  summarise(average_euribor = round(mean(value),4))
+  
+euribor18_q
+```
+
+Saving **euribor_q** table.
+
+```{r}
+# write.csv(euribor18_q, file = "euribor_q.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
 ```
 
 ```{r}
-ggplot(data = results, aes(x = rforest, y = price_sq_m)) +
-  geom_point(data = subset(results, lm > 0)) +
-  labs(title = "Forward Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
-  geom_abline(intercept = 0, slope = 1, colour = "blue") +
-  theme_bw()
+madrid_idealista <- madrid_idealista %>% 
+  full_join(euribor18_q, by = "period")
 ```
 
-#### Gradient Boosting
+#### 3.2.2. Airbnb
+
+[Datahippo Airbnb](https://datahippo.org/media/regions/4c7e35e4-46d3-4a82-baae-1a16d7d0ea48/599230508a46554e81f2887e_airbnb.csv)
 
 ```{r}
-xboost <- train(variables1, 
-                  data = training,
-                  method = "xgbTree",
-                  preProc=c('scale','center'),
-                  trControl = ctrl,
-                  tuneGrid = expand.grid(nrounds = c(500,700), 
-                                         max_depth = c(5,6,7), 
-                                         eta = c(0.01, 0.1, 1),
-                                         gamma = c(1, 2, 3), 
-                                         colsample_bytree = c(0.5, 1), # change this by = c(0.5, 1)
-                                         min_child_weight = c(1), 
-                                         subsample = c(0.2,0.5,0.8)))
+airbnb <- read_csv("Data/airbnb_data.csv", show_col_types = FALSE)
+
+airbnb
 ```
+
+Check for no duplicates in Airbnb data.
 
 ```{r}
-results$xboost <- predict(xboost, testing)
-postResample(pred = results$xboost,  obs = results$price_sq_m)
+sum(duplicated(airbnb$id))
 ```
 
-Trial SHAP values
+This database only cointains information up to the third quarter of the year 2018.
 
 ```{r}
-# shap_values_xboost <- predict(xboost, testing, predcontrib = TRUE, approxcontrib = FALSE)
-```
-
-[Find the most important variables in R-Programming](https://medium.com/@amitjain2110/how-to-find-the-most-important-variables-in-r-programming-65be0252d7ba)
-
-```{r warning = FALSE}
-library(varImp)
+min(airbnb$found)
+max(airbnb$found)
 ```
 
 ```{r}
-knn
-varImp(knn)
-varImp(rforest, conditional = TRUE)
-varImp(xboost) # Error in varImp(xboost) : trying to get slot "responses" from an object (class "train") that is not an S4 object
+airbnb <- airbnb %>% 
+  select(id, longitude, latitude, found, revised, room_type, capacity) %>% 
+  rename(long = longitude, lat = latitude)
 ```
 
-#### Trial: Neural Networks
+"Revised" is the last time found the dwelling in the platform. We are only going to consider those from 01th of January of 2018.
 
 ```{r}
-# neural_networks <- train(variables1, 
-#                  data = training,
-#                  method = "neuralnet",
-#                  preProc=c('scale','center'),
-#                  trControl = ctrl,
-#                  tuneGrid = expand.grid(layer1 = c(4, 2),
-#                                         layer2 = c(2, 1, 0),
-#                                         layer3 = c(0)))
+airbnb <- airbnb %>% 
+  filter(revised >= as.Date("2018-01-01")) 
+```
+
+Creating the geometry for each dwelling.
+
+```{r}
+airbnb <- st_as_sf(airbnb, coords = c("long", "lat"), crs = 4326)
+
+airbnb
+```
+
+```{r}
+airbnb <- st_join(airbnb, Madrid_Polygons, join = st_within) %>% 
+  select(-c(LOCATIONID, ZONELEVELID)) %>% 
+  rename(neighbourhood = LOCATIONNAME)
+```
+
+Those homes that have an NA in their LOCATION is because they are from the Community of Madrid, but not from the City of Madrid, so there is no interest in working on them. They can be removed from the data.
+
+```{r}
+airbnb <- airbnb %>% 
+  filter(!is.na(neighbourhood))
+```
+
+Consult aggregated data by neighbourhood.
+
+```{r}
+airbnb %>%
+  group_by(neighbourhood) %>%
+  summarise(total_capacity = sum(capacity)) %>%
+  arrange(desc(total_capacity))
+```
+
+Separating houses in Airbnb by quarters (01 for the first, 02 for the second and 03 for the third).
+
+```{r}
+airbnb_q1 <- airbnb %>% 
+  filter(found < as.Date("2018-04-01")) 
+
+airbnb_q2 <- airbnb %>% 
+  filter(found < as.Date("2018-07-01") & revised > as.Date("2018-03-30") & revised < as.Date("2018-07-01")) 
+
+airbnb_q3 <- airbnb %>% 
+  filter(revised > as.Date("2018-06-30")) 
+```
+
+Adding each dataset its corresponding quarter.
+
+```{r}
+airbnb_q1 <- airbnb_q1 %>% 
+  mutate(period = as.yearqtr("2018 Q1", format = "%Y Q%q"))
+
+airbnb_q2 <- airbnb_q2 %>% 
+  mutate(period = as.yearqtr("2018 Q2", format = "%Y Q%q"))
+
+airbnb_q3 <- airbnb_q3 %>% 
+  mutate(period = as.yearqtr("2018 Q3", format = "%Y Q%q"))
+```
+
+Reaching to the final aggregated Airbnb information by quarters.
+
+```{r}
+airbnb_ag <- rbind(airbnb_q1, airbnb_q2, airbnb_q3)
+```
+
+There are Airbnb dwellings operating in more than one quarter of the year.
+
+```{r}
+sum(duplicated(airbnb_ag$id))
+```
+
+```{r message = FALSE}
+airbnb_final <- airbnb_ag %>%
+  group_by(neighbourhood, period) %>%
+  summarise(n_houses_airbnb = n(),
+            n_places_airbnb = sum(capacity)) %>% 
+  st_drop_geometry()
+
+airbnb_final
+```
+
+Saving **airbnb_final** table.
+
+```{r}
+# write.csv(airbnb_final, file = "airbnb_final.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
+```
+
+To have in the same dataset geometry and separated longitude and latitude information.
+
+```{r}
+madrid_idealista <- st_as_sf(madrid_idealista, coords = c("long", "lat"), crs = 4326) %>% 
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+Neighbourhoods resulting in NA are because they do not have any Airbnb house surrounding.
+
+```{r}
+madrid_idealista <- madrid_idealista %>% 
+  filter(period != "2018 Q4")
+
+madrid_idealista <- madrid_idealista %>% 
+  # st_drop_geometry() %>% 
+  full_join(airbnb_final, by = c("neighbourhood", "period"))
+
+madrid_idealista <- madrid_idealista %>%
+  mutate(n_houses_airbnb = replace_na(n_houses_airbnb, 0),
+         n_places_airbnb = replace_na(n_places_airbnb, 0))
+```
+
+#### 3.2.3. Parks and green areas
+
+```{r message = FALSE}
+parks <- read_delim("Data/parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
+  select(c(NOMBRE, LATITUD, LONGITUD)) %>% 
+  rename(name = NOMBRE, lat = LATITUD, long = LONGITUD)
+```
+
+```{r}
+parks <- st_as_sf(parks, coords = c("long", "lat"), crs = 4326) %>% 
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+data("Madrid_Polygons")
+Madrid_Polygons
+```
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  mutate(park_proximity_m = st_distance(., parks) %>% apply(1, min),
+         park_proximity = park_proximity_m / 1000) %>% 
+  select(-park_proximity_m)
+```
+
+Aluche example distance calculation (to Parque Aluche)
+
+```{r}
+# A2589730015233487221 Aluche ~= coord park
+# A1827641402258800038 Aluche a bit further
+
+madrid_idealista %>% select(id, park_proximity) %>% filter(id == "A2589730015233487221" | id == "A1827641402258800038")
+```
+
+Opera example distance calculation (to Jardines de Sabatini)
+
+```{r}
+# A12651484524718559564 Opera (Palacio) near to Jardines de Sabatini
+# A16593819002392137683 Opera (Palacio) a bit further
+madrid_idealista %>% select(id, park_proximity) %>% filter(id == "A12651484524718559564" | id == "A16593819002392137683")
+```
+
+#### 3.2.4. Educational centers
+
+[Educational centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=f14878a6d4556810VgnVCM1000001d4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
+
+```{r message = FALSE}
+educational_centers <- read_delim("Data/educational_centers.csv", delim = ";",
+                                  show_col_types = FALSE) %>% 
+  select(NOMBRE, LONGITUD, LATITUD) %>% 
+  rename(name = NOMBRE, long = LONGITUD, lat = LATITUD) %>% 
+  drop_na() # drop 5 centers without location
+```
+
+Converting to an sf object.
+
+```{r}
+educational_centers <- st_as_sf(educational_centers, coords = c("long", "lat"), crs = 4326) %>% 
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  mutate(educ_center_proximity_m = st_distance(., educational_centers) %>% apply(1, min),
+         educ_center_proximity = educ_center_proximity_m / 1000) %>% select(-educ_center_proximity_m)
+```
+
+#### 3.2.5. Health centers
+
+[Health centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=da7437ac37efb410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
+
+```{r message = FALSE}
+health_centers <- read_delim("Data/health_centers.csv", delim = ";", show_col_types = FALSE) %>% 
+  select(NOMBRE, LONGITUD, LATITUD) %>%
+  rename(name = NOMBRE, long = LONGITUD, lat = LATITUD)
+```
+
+Remove drug and addictions centers.
+
+```{r message = FALSE}
+health_centers <- health_centers %>% 
+  filter(!str_detect(name, "CAD|CCAD|CAID"))
+```
+
+```{r}
+health_centers <- st_as_sf(health_centers, coords = c("long", "lat"), crs = 4326) %>% 
+  mutate(long = st_coordinates(geometry)[, 1],
+         lat = st_coordinates(geometry)[, 2])
+```
+
+```{r}
+madrid_idealista <- madrid_idealista %>%
+  mutate(health_center_proximity_m = st_distance(., health_centers) %>% apply(1, min),
+         health_center_proximity = health_center_proximity_m / 1000) %>%
+  select(-health_center_proximity_m)
+```
+
+Saving the final dataset into a .csv
+
+```{r}
+# madrid_idealista_to_save <- as.data.frame(st_drop_geometry(madrid_idealista))
+```
+
+```{r}
+# write.csv(madrid_idealista_to_save, file = "madrid_idealista.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
+```
+
+#### Plot 4: Parks, Educational and Health centers map
+
+[Leaflet](https://rstudio.github.io/leaflet/map_widget.html)
+
+```{r}
+class(parks)
+class(educational_centers)
+class(health_centers)
+```
+
+```{r}
+map <- leaflet() %>%
+  setView(lng = -3.759284, lat = 40.39557, zoom = 10)
+
+map <- map %>%
+  addPolygons(data = geodata_districts,
+              fillColor = "red",   # Change color as desired
+              fillOpacity = 1,    # Adjust opacity as desired
+              color = "black",      # Border color
+              weight = 1)           # Border weight
+map
 ```
 
 
-#### Trial: SHAP RandomF Forest
-
 ```{r}
-# install.packages("SHAPforxgboost")
-library(SHAPforxgboost)
+# Create a blank Leaflet map
+map <- leaflet() %>%
+  setView(lng = "long", lat = "lat", zoom = 10)
+
+# Choose a tile layer
+map <- map %>% addTiles()
+
+
+
+# Load the district data and add it to the map
+district_layer <- addPolygons(map, data = geodata_districts, 
+                                       fillColor = "lightblue",
+                                       color = "black",
+                                       weight = 2) # width border pixels
+
+# Add each center to the map as a different layer
+parks_layer <- addMarkers(map, data = parks, 
+                                   long = ~longitude, lat = ~latitude,
+                                   color = "green")
+educational_centers_layer <- addMarkers(map, data = educational_centers,
+                                                 lng = ~longitude, lat = ~latitude,
+                                                 color = "blue")
+health_centers_layer <- addMarkers(map, data = health_centers,
+                                            lng = ~longitude, lat = ~latitude,
+                                            color = "orange")
+
+
+
+# Add layer controls to enable the user to control them
+map <- map %>% addLayersControl(
+  overlayGroups = c("parks_layer", "educational_centers_layer",
+                    "health_centers_layer"),
+  options = layersControlOptions(collapsed = FALSE)
+)
 ```
 
-[SHAP](https://www.r-bloggers.com/2021/06/shap-analysis-in-9-lines/)
+
+### 3.3. Data quality assessment
+
+This section dedicated to exploring characteristics of duplicates in data. 
+
+Dataset with houses repeated more than once (including all rows).
 
 ```{r}
-# Step 1: Select some observations
-X <- data.matrix(data[sample(nrow(data), 1000), c("n_room", "n_bath", "terrace", "lift", "air_cond", "parking", "boxroom", "wardrobe", "pool", "doorman", "garden", "external", "year_built", "floors", "n_dwelling", "km_to_center", "metro_proximity", "orientation", "average_euribor", "long", "lat", "n_houses_airbnb", "n_places_airbnb", "park_proximity", "educ_center_proximity", "health_center_proximity")])
+exploratory <- idealista18 %>% 
+  group_by(id) %>%
+  filter(n() > 1) %>% 
+  arrange(id)
 
-# Step 2: Crunch SHAP values
-shap <- shap.prep(xboost, X_train = data) # Warning: variable ... is not a factor
+exploratory <- exploratory %>%
+  group_by(id) %>% 
+  mutate(across(c(north_orientation, south_orientation, east_orientation, 
+                  west_orientation), ~max(.)))
 
-# Step 3: SHAP importance
-shap.plot.summary(shap)
+exploratory <- exploratory %>% 
+  mutate(orientation = as_factor(case_when(
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "None",
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "Low", # north
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # west
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # east
+  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # east-west
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # north-west
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # north-east
+  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # north-east-west
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-west
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-east
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south-north
+  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Good", # south-east-west
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-north-east
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-north-west
+  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Full")),
+         period = case_when(period == 201803 ~ "20181",
+                            period == 201806 ~ "20182",
+                            period == 201809 ~ "20183",
+                            period == 201812 ~ "20184"),
+         period = as.yearqtr(format(period), "%Y%q")) %>% 
+  select(-c(north_orientation, south_orientation, east_orientation, west_orientation))
 
-# Step 4: Loop over dependence plots in decreasing importance
-for (v in shap.importance(shap, names_only = TRUE)) {
-  p <- shap.plot.dependence(shap, v, color_feature = "auto", 
-                            alpha = 0.5, jitter_width = 0.1) +
-    ggtitle(v)
-  print(p)
-}
+exploratory
+```
+
+```{r}
+variations <- exploratory %>% 
+  group_by(id) %>% 
+  summarise(price_min = min(price_sq_m),
+            price_max = max(price_sq_m),
+            price_variation = ((price_max - price_min)/price_min)*100)
+
+variations
+```
+
+Average variation in the price of a square meter.
+
+```{r}
+sum(is.na(variations$price_variation))
+mean(variations$price_variation)
+```
+
+Orientation: dwellings with no location.
+
+```{r}
+exploratory
+```
+
+Mean antiquity of buildings with no orientation is more than 55 years. 
+
+```{r}
+exploratory_orientation <- exploratory %>% 
+  group_by(id) %>% 
+  filter(orientation == "None") %>% 
+  slice(1) # select the first row that satisfies the condition
+ 
+mean(exploratory_orientation$year_built)
 ```
 
 
