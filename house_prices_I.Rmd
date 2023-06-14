@@ -3,6 +3,7 @@ title: "Master's Thesis"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
+description: "This is the first .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document ***** that can be found in this repository. This markdown contains the code needed for conducting the analysis until point 2. ANALYSIS OF THE SITUATION included."
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, fig.align = "center")
 
 Loading libraries.
 
-```{r message = FALSE}
+```{r message = FALSE, warning = FALSE}
 # General libraries:
 library(tidyverse)
 library(stringr) # regex
@@ -29,6 +30,7 @@ library(RColorBrewer)
 library(wordcloud)
 library(sf) # geometry polygons
 library(zoo) # date (quarters)
+library(leaflet) # maps
 
 # Times New Roman font import:
 library(extrafont)
@@ -37,15 +39,25 @@ library(extrafont)
 library(geosphere)
 ```
 
-## 0. Introduction
+## 1. INTRODUCTION
 
-## 1. Objectives
+### 1.1. Motivation of the work
+No code
 
-## 2. Methodology
+### 1.2. Ojectives
+No code
 
-## 3. Presentation of the problem
+### 1.3. Methodology
+No code
 
-#### Plot 1: Dwelling Price Index (DPI) variation over time (quarters)
+### 1.4. Technical requirements and precautions
+No code
+
+## 2. ANALYSIS OF THE SITUATION
+
+### Prices of dwellings in Spain
+
+#### Plot 1: Housing Price Index (HPI) variation over time (quarters)
 
 Source: [INE](https://www.ine.es/jaxiT3/Datos.htm?t=25171)
 
@@ -54,28 +66,28 @@ Source: [INE](https://www.ine.es/jaxiT3/Datos.htm?t=25171)
 Reading raw data from .csv file.
 
 ```{r}
-dpi <- read_delim("Data/dwelling_price_index_INE.csv", 
+hpi <- read_delim("Data/dwelling_price_index_INE.csv", 
                   delim = ";", skip = 1, col_types = "c", 
-                  col_names = c("remove1", "Group", "remove2", "remove3", "Period", "DPI")) %>%
+                  col_names = c("remove1", "Group", "remove2", "remove3", "Period", "HPI")) %>%
   select(-c("remove1", "remove2", "remove3"))
 
-head(dpi)
+head(hpi)
 ```
 
 Organizing the dataframe information:
 
 - Substituting *NAs* in *Group* column by *Total National*.
 - Substituting *Madrid* in *Group* column by *Community of Madrid*.
-- Substituting commas per dots in *DPI* and converting to numeric column type. 
+- Substituting commas per dots in *HPI* and converting to numeric column type. 
 
 ```{r}
-dpi <- dpi %>%
+hpi <- hpi %>%
   mutate(Group = ifelse(is.na(Group), "Total national", 
                         sub(".*Madrid.*", "Community of Madrid", Group)),
-         DPI = as.numeric(sub(",", ".", DPI)),
+         HPI = as.numeric(sub(",", ".", HPI)),
          Period = str_replace(Period, "T", ""))
 
-head(dpi)
+head(hpi)
 ```
 
 Plotting:
@@ -83,7 +95,7 @@ Plotting:
 - Formatting *Period* information into year quarters.
 
 ```{r}
-dpi <- dpi %>%
+hpi <- hpi %>%
   mutate(Period = as.yearqtr(format(Period), "%Y%q"))
 ```
 
@@ -101,8 +113,8 @@ so it can be used now in R.
 - Plot.
 
 ```{r fig.height = 5, fig.width = 8.5}
-dpi_plot <- dpi %>% 
-  ggplot(aes(y = DPI, x = Period, group = Group, color = Group)) + 
+hpi %>% 
+  ggplot(aes(y = HPI, x = Period, group = Group, color = Group)) + 
   geom_line(linewidth = 1.3) + 
   labs(x = NULL, y = NULL) +
   theme(legend.title = element_blank(),
@@ -124,14 +136,12 @@ dpi_plot <- dpi %>%
   scale_y_continuous(limits = c(-7.5, 7.5), breaks = seq(-7.5, 7.5, by = 3),
                      labels = function(x) paste0(x, "%")) + # Add "%" symbol to y-labels
   scale_x_yearqtr(format = "%Y", # format = "%YQ%q" to put QX after each label
-                  limits = c(min(dpi$Period), max(dpi$Period)),
-                  breaks = seq(from = min(dpi$Period), to = max(dpi$Period), by = 1),
+                  limits = c(min(hpi$Period), max(hpi$Period)),
+                  breaks = seq(from = min(hpi$Period), to = max(hpi$Period), by = 1),
                   expand = c(0, 0.5)) +
-  geom_vline(xintercept = as.numeric(seq(min(dpi$Period), max(dpi$Period), by = 1)), 
+  geom_vline(xintercept = as.numeric(seq(min(hpi$Period), max(hpi$Period), by = 1)), 
              linetype = "dashed",
              color = "grey")
-
-dpi_plot
 ```
 
 #### Data bank from Madrid Council - Statistical information
@@ -195,12 +205,12 @@ madrid_longer %>%
 #### Plot 3: Average price per sq meter of Districts in Madrid
 
 ```{r}
-madrid_districts <- madrid_m2 %>% 
+madrid_map <- madrid_m2 %>% 
   filter(str_detect(Neighbourhood,'^\\d{2}\\.')) %>% # start by two digits followed by a dot
   rename("remove" = "District", "District" = "Neighbourhood") %>% 
   select(-"remove") 
 
-madrid_districts
+madrid_map
 ```
 
 [Geodata 21 districts from Madrid municipality](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=7d6e5eb0d73a7710VgnVCM2000001f4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default)
@@ -220,804 +230,91 @@ geodata_districts
 ```
 
 ```{r}
-madrid_districts <- madrid_districts %>% 
-  left_join(geodata_districts, by = "District")
-
-madrid_districts
+madrid_map <- madrid_map %>% left_join(geodata_districts, by = "District")
 ```
 
-```{r fig.height= 5, fig.width= 5}
-ggplot() +
-  geom_sf(data = madrid_districts, aes(fill = `2018`, geometry = geometry)) +
-  scale_fill_gradient(low = "white", high = "darkred") +
-  labs(title = "Price per sq meter in Madrid City by District", subtitle = "Year: 2018",
-       x = "Longitude", y = "Latitude") +
+```{r fig.height = 6, fig.width = 8.5}
+madrid_map %>%
+ggplot(aes(fill = `2022`, geometry = geometry)) +
+  geom_sf(color = "black") +
+  scale_fill_gradient(low = "ivory", high = "orangered") +
+  labs(x = NULL, y = NULL) +
   theme_void() +
   theme(text = element_text(family="Times New Roman"),
         legend.title = element_blank(),
         legend.key = element_blank(),
         legend.position = c(1.1, 0.8),
         legend.direction = "vertical",
+        legend.text = element_text(size = 15),
         plot.margin = margin(0, 0, 0, 0, "pt"))  +
-  annotate("text", x = 427500, y = 4479000, label = "Centro", # 1 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 440000, y = 4460000, label = "Arganzuela", # 2 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 460000, y = 4470000, label = "Retiro", # 3 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 460000, y = 4475000, label = "Salamanca", # 4
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 448200, y = 4487500, label = "Chamartín", # 5 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 447000, y = 4490000, label = "Tetuán", # 6 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 427500, y = 4477000, label = "Chamberí", # 7 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 435000, y = 4487500, label = "Fuencarral-\nEl Pardo", # 8 OK
+  annotate("text", x = 426800, y = 4472900, label = "Centro", # 1 OK
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 437000, y = 4477500, label = "Moncloa-\nAravaca", # 9 OK
+  annotate("text", x = 434000, y = 4461000, label = "Arganzuela", # 2 OK
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 456500, y = 4466000, label = "Retiro", # 3 OK
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 457000, y = 4486500, label = "Salamanca", # 4
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 448200, y = 4487500, label = "Chamartín", # 5 OK
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 445500, y = 4490000, label = "Tetuán", # 6 OK
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 425900, y = 4474600, label = "Chamberí", # 7 OK
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 435000, y = 4487500, label = "Fuencarral-\nEl Pardo", # 8
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 436800, y = 4477500, label = "Moncloa-\nAravaca", # 9
+           size = 4, family = "Times New Roman") +
+  annotate("text", x = 433000, y = 4470500, label = "Latina", # 10
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 427500, y = 4463000, label = "Carabanchel", # 11
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 440400, y = 4469200, label = "Usera", # 12
            size = 3.5, family = "Times New Roman") +
-  annotate("text", x = 433000, y = 4470000, label = "Latina", # 10 OK
+  annotate("text", x = 451000, y = 4460000, label = "Puente de Vallecas", # 13
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 457500, y = 4468000, label = "Moratalaz", # 14
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 459000, y = 4480000, label = "Ciudad \nLineal", # 15
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 446200, y = 4482500, label = "Hortaleza", # 16
            size = 4, family = "Times New Roman") +
-  annotate("text", x = 427500, y = 4462500, label = "Carabanchel", # 11 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 432500, y = 4460000, label = "Usera", # 12 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 451000, y = 4460000, label = "Puente de Vallecas", # 13 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 460000, y = 4465000, label = "Moratalaz", # 14 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 460000, y = 4480000, label = "Ciudad Lineal", # 15 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 446200, y = 4482500, label = "Hortaleza", # 16 OK
+  annotate("text", x = 441000, y = 4466000, label = "Villaverde", # 17
            size = 3.5, family = "Times New Roman") +
-  annotate("text", x = 441000, y = 4466000, label = "Villaverde", # 17 OK
-           size = 3, family = "Times New Roman") +
-  annotate("text", x = 447500, y = 4467000, label = "Villa de \nVallecas", # 18 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 451000, y = 4472500, label = "Vicálvaro", # 19 OK
-           size = 4, family = "Times New Roman") +
-  annotate("text", x = 449000, y = 4476100, label = "San Blas-\nCanillejas", # 20 OK
-           size = 3, family = "Times New Roman") +
-  annotate("text", x = 451500, y = 4480000, label = "Barajas", # 21 OK
-            size = 4, family = "Times New Roman") 
-```
-
-## 4. Data extraction and preprocessing
-
-### 4.1.1. Idealista (2023)
-
-Read personal private credentials (hidden).
-
-User's personal credentials are provided by API's host. It is shown how they should be loaded in R from a
-hidden location in the computer. In this case, credentials are stored in a separated folder (not included in the data
-available). Instead of using this directory, the person who wishes to reproduce this code should introduce its own
-credentials. If the study is not going to be public, no hidden data is needed so, instead, consumer apikey and secret
-can be loaded itself.
-
-```{r}
-# consumer_apikey <- readLines("../Secret/consumer_apikey.txt")
-# consumer_secret <- readLines("../Secret/consumer_secret.txt")
-# api_key_secret <- paste0(consumer_apikey, ":", consumer_secret)
-```
-
-Using basic authentication.
-
-```{r}
-# secret <- base64_enc(api_key_secret)
-# 
-# req <- httr::POST("https://api.idealista.com/oauth/token",
-#        httr::add_headers(
-#          "Authorization" = paste("Basic", secret, sep = " "),
-#          "Content-Type" = "application/x-www-form-urlencoded;charset=utf-8"
-#             ),
-#        body = "grant_type=client_credentials&scope=read"
-#             ) 
-# 
-# token <- paste("Bearer", httr::content(req)$access_token)
-```
-
-Establishing the desired parameters to search.
-
-```{r}
-# site = "https://api.idealista.com/3.5/es/search?"
-# loc = "center="
-# x = 40.40691
-# y = -3.70958
-# country = "&country=es"
-# maxItems = "&maxItems=50"
-# pages = "&numPage=1"
-# dist = "&distance="
-# distance = 1000
-# property = "&propertyType="
-# type = "homes"
-# operation = "&operation="
-# op = "sale"
-# chalet = "&chalet=0"
-```
-
-Building the url.
-
-```{r}
-# url1 <- paste(site, loc, x, ',', y, country, maxItems, pages, dist, distance, 
-#              property, type, operation, op, sep = "")
-```
-
-Requesting the information through Idealista's API.
-
-```{r}
-# res1 <- httr::POST(url1, httr::add_headers("Authorization" = token))
-```
-
-Extracting the JSON content.
-
-```{r}
-# cont_raw2 <- httr::content(res1)
-```
-
-
-### 4.1.2. Idealista (2018)
-
-Database from Idealista (private online Real Estate portal).
-
-```{r}
-# devtools::install_github("paezha/idealista18")
-library(idealista18)
-```
-
-Data from Madrid 2018.
-
-[idealista18](https://paezha.github.io/idealista18/)
-
-```{r}
-data("Madrid_Sale")
-class(Madrid_Sale)
-```
-
-Initial selection: from 42 variables to 30.
-
-```{r}
-idealista18 <- Madrid_Sale %>% 
-  select(ASSETID, PERIOD, PRICE, CONSTRUCTEDAREA, UNITPRICE, ROOMNUMBER, 
-         BATHNUMBER, HASTERRACE, HASLIFT, HASAIRCONDITIONING,
-         ISPARKINGSPACEINCLUDEDINPRICE, HASNORTHORIENTATION, 
-         HASSOUTHORIENTATION, HASEASTORIENTATION, HASWESTORIENTATION, 
-         HASBOXROOM, HASWARDROBE, HASSWIMMINGPOOL, HASDOORMAN, HASGARDEN, 
-         FLATLOCATIONID, CADCONSTRUCTIONYEAR, CADMAXBUILDINGFLOOR, 
-         CADDWELLINGCOUNT, DISTANCE_TO_CITY_CENTER, DISTANCE_TO_METRO, 
-         LONGITUDE, LATITUDE) %>% 
-  rename(id = ASSETID, period = PERIOD, price = PRICE,
-         built_area = CONSTRUCTEDAREA, price_sq_m = UNITPRICE,
-         n_room = ROOMNUMBER, n_bath = BATHNUMBER, terrace = HASTERRACE,
-         lift = HASLIFT, air_cond = HASAIRCONDITIONING,
-         parking = ISPARKINGSPACEINCLUDEDINPRICE,
-         north_orientation = HASNORTHORIENTATION,
-         south_orientation = HASSOUTHORIENTATION, 
-         east_orientation = HASEASTORIENTATION,
-         west_orientation = HASWESTORIENTATION, boxroom = HASBOXROOM,
-         wardrobe = HASWARDROBE, pool = HASSWIMMINGPOOL, 
-         doorman = HASDOORMAN, garden = HASGARDEN,
-         external = FLATLOCATIONID, year_built = CADCONSTRUCTIONYEAR,
-         floors = CADMAXBUILDINGFLOOR, n_dwelling = CADDWELLINGCOUNT,
-         km_to_center = DISTANCE_TO_CITY_CENTER,
-         metro_proximity = DISTANCE_TO_METRO, long = LONGITUDE, lat = LATITUDE)
-```
-
-Issues with raw data:
-
-- There is a difference between unique row number and the total number of rows.
-
-```{r}
-nrow(idealista18) - length(unique(idealista18$id))
-```
-
-- Many dwellings without orientation.
-
-```{r}
-idealista18 %>% filter(north_orientation == 0 & south_orientation == 0 & east_orientation == 0 & west_orientation == 0)
-```
-
-Dropping geometry to make operations.
-
-```{r}
-idealista18 <- st_drop_geometry(idealista18)
-```
-
-Recoding of external. If "yes" = 1, if "no" = 0.
-
-```{r}
-idealista18 <- idealista18 %>% 
-  mutate(external = case_when(external == 2 ~ 0,
-                              external == 1 ~ 1,
-                              is.na(external) ~ NA_real_))
-```
-
-Operations:
-
-- Max for logical variables (in numeric format)
-- Average for numerical (continuous) variables
-
-```{r}
-idealista <- idealista18 %>% 
-  group_by(id) %>% 
-  mutate(across(c(period, price, built_area, n_room, n_bath, 
-                  year_built, floors, n_dwelling, 
-                  km_to_center, metro_proximity, long, lat), mean),
-         across(c(terrace, lift, air_cond, parking, 
-                  north_orientation, south_orientation, east_orientation, 
-                  west_orientation, boxroom, wardrobe, pool, doorman, 
-                  garden, external), ~max(.)),
-         across(c(price, built_area, price_sq_m, n_room, n_bath), round))
-
-sapply(idealista, function(x) sum(is.na(x))*100/nrow(idealista)) # % of NAs per row
-
-idealista <- idealista %>% distinct(id, .keep_all = TRUE) %>% drop_na() # drops rows with no information available about 'external'
-```
-
-Classifying orientation:
-
-```{r}
-idealista <- idealista %>% 
-  mutate(orientation = as_factor(case_when(
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "None",
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "Low", # north
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # west
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # east
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # east-west
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # north-west
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # north-east
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # north-east-west
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-west
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-east
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south-north
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Good", # south-east-west
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-north-east
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-north-west
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Full")),
-         period = case_when(period == 201803 ~ "20181",
-                            period == 201806 ~ "20182",
-                            period == 201809 ~ "20183",
-                            period == 201812 ~ "20184"),
-         period = as.yearqtr(format(period), "%Y%q")) %>% 
-  select(-c(north_orientation, south_orientation, east_orientation, west_orientation))
-```
-
-Reconverting the dataframe into a geometry object.
-
-```{r}
-idealista <- st_as_sf(idealista, coords = c("long", "lat"), crs = 4326)
-```
-
-Joining each dwelling with its corresponding neighbourhood. 
-
-```{r}
-madrid_idealista <- st_join(idealista, Madrid_Polygons, join = st_within)
-
-madrid_idealista <- madrid_idealista %>% 
-  select(-c(LOCATIONID, ZONELEVELID)) %>% 
-  rename(neighbourhood = LOCATIONNAME)
-```
-
-To have in the same dataset geometry and separated longitude and latitude information.
-
-```{r}
-madrid_idealista <- madrid_idealista %>%
-  mutate(long = st_coordinates(geometry)[, 1],
-         lat = st_coordinates(geometry)[, 2])
-```
-
-Identification of observations that contain errors:
-
-- A10991866817670907438: price = 450000, n_rooms = 93 (wrong number of rooms)
-- A8866129769871540210: price = 109000, n_rooms = 33 (wrong number of rooms) 
-
-```{r}
-madrid_idealista %>% filter(n_room > 25)
-```
-
-- A7501251371917084834: long = - 2.753303, lat = 36.75639 (house located in Almería)
-
-```{r}
-madrid_idealista %>% filter(long > -3.50 & lat < 40.00)
-```
-
-Removing wrong observations.
-
-```{r}
-madrid_idealista <- madrid_idealista %>%
-  filter(!(long > -3.50 & lat < 40.00)) %>%
-  filter(!(price %in% c(450000, 109000) & n_room %in% c(93, 33)))
-```
-
-Check for NA percentage in each variable.
-
-```{r}
-sapply(madrid_idealista, function(x) sum(is.na(x))*100/nrow(madrid_idealista))
-```
-
-```{r}
-madrid_idealista %>% filter(is.na(neighbourhood)) %>% arrange(id)
-```
-
-After a deeper investigation it has been found that those remaining dwellings without neighbourhood information are
-located in the main streets or avenues which are located in the boundaries of two neighbourhoods.
-The best solution found has been to consult manually the location and assign a neighbourhood according to the part of
-the street where these houses are found. Despite this small detail, neighbourhood itself will not be as important for
-this study, the interest is mainly in the district, which is the same for the two neighbourhoods.
-Only dwellings from the three first quarters of the year will be handled because, as explained later, the analysis is
-only going to be considering this period.
-
-```{r}
-missing_n <- data.frame(madrid_idealista %>% 
-  filter(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
-                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
-                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
-                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
-                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
-                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
-                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
-                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
-                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
-                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
-                   "A13947664044826473945")) %>% 
-  mutate(neighbourhood = c("Legazpi", "Castilla", "Palomeras Bajas", "Piovera", "Pinar del Rey", 
-                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
-                           "Casco Histórico de Vallecas", "Adelfas", "Ciudad Jardín", "Nueva España", "Nueva España", 
-                           "Ciudad Universitaria", "Valdebebas - Valdefuentes", "Valdefuentes", 
-                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
-                           "Alameda de Osuna", "Legazpi", "Estrella", "Valdeacederas", "Castillejos", 
-                           "Puerta del Ángel", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
-                           "Valdebebas - Valdefuentes", "Arapiles", "Cuatro Caminos", "Buenavista", "Vinateros", 
-                           "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", "Valdebebas - Valdefuentes", 
-                           "Delicias", "Peñagrande", "Valdebebas -Valdefuentes", "Valdebebas - Valdefuentes", 
-                           "Valdebebas - Valdefuentes", "Casco Histórico de Vallecas"))) %>% 
-  st_drop_geometry()
-
-missing_n
-
-madrid_idealista <- madrid_idealista %>% 
-  filter(!(id %in% c("A16435294318315958522", "A713741178483582771", "A17974577062442055154", "A7640522779001274113", 
-                   "A16293887458042174614", "A2558868114930352875", "A10040860376639148021", "A11024076574113822412", 
-                   "A8975421952301567018", "A15391127164769132499", "A7276195934098417167", "A14373658715532580887", 
-                   "A12512273801481420708", "A4124869518560963783", "A1047707405959696934", "A14527656687040890533", 
-                   "A392049767746391904", "A9152666484316798621", "A10555682128559782831", "A1770016731578591700", 
-                   "A2850681705060765887", "A15122532253238651164", "A11875273696714479769", "A2916148036363906874", 
-                   "A8323672166361605012", "A14425820252961357301", "A16832610759102053201", "A16175240154493734292", 
-                   "A12449866803255143264", "A6566989044715844699", "A4695742828180854443", "A8834840793393699611", 
-                   "A2371944396876658222", "A17669068010471096780", "A12275460312855642440", "A13456631820999789083", 
-                   "A2415811276745293011", "A12855371497725279279", "A12427375718741803668", "A15415301456868430114", 
-                   "A13947664044826473945"))) %>% 
-  st_drop_geometry()
-
-madrid_idealista <- madrid_idealista %>% bind_rows(missing_n) %>% select(-geometry)
-```
-
-Cleaned idealista's data.
-
-```{r}
-madrid_idealista
-```
-
-### 4.2.1. Euribor
-
-Identification of my user agent.
-This step is not compulsory/required to scrap, but is highly recommended. Each user should introduce their information
-regarding profile and device, so that the web being scraped is aware of who is doing so and if the user is causing any
-inconvenience they could be rapidly contacted with no further grievance.
-
-```{r}
-# set_config(user_agent("User Agent; Name Surname Surname (occupation or purpose) / email"))
-```
-
-Scraping Euribor information.
-
-[Expansión/Datosmacro.com](https://datosmacro.expansion.com/hipotecas/euribor?anio=2018)
-
-Reading the website into R.
-
-```{r}
-link_euribor <- "https://datosmacro.expansion.com/hipotecas/euribor?anio=2018"
-html_website <- link_euribor %>% read_html()
-html_website
-```
-
-Selecting the desired table.
-
-```{r}
-euribor18 <- html_website %>%
-  html_table() %>% 
-  .[[3]]
-
-euribor18
-```
-
-Handling needed data.
-
-```{r}
-euribor18 <- euribor18 %>% 
-  select(Fecha, Tipo) %>% 
-  rename(month_sp = Fecha, value = Tipo) %>% 
-  slice(1:(nrow(euribor18) - 1)) # removing last row
-
-euribor18 <- euribor18 %>%
-  mutate(month_sp = str_replace_all(month_sp, " 2018", ""), # eliminating "2018" from each row
-         value = str_replace_all(value, ",", ".")) %>% 
-  mutate(month = case_when(
-    month_sp == "Enero" ~ "January",
-    month_sp == "Febrero" ~ "February",
-    month_sp == "Marzo" ~ "March",
-    month_sp == "Abril" ~ "April",
-    month_sp == "Mayo" ~ "May",
-    month_sp == "Junio" ~ "June",
-    month_sp == "Julio" ~ "July",
-    month_sp == "Agosto" ~ "August",
-    month_sp == "Septiembre" ~ "September",
-    month_sp == "Octubre" ~ "October",
-    month_sp == "Noviembre" ~ "November",
-    month_sp == "Diciembre" ~ "December",
-    TRUE ~ NA_character_
-  )) %>% 
-  select(month, value, -month_sp)
-```
-
-```{r}
-euribor18_q <- euribor18 %>% 
-  mutate(period = case_when(
-    month %in% c("December", "November", "October") ~ "20184",
-    month %in% c("September", "August", "July") ~ "20183",
-    month %in% c("June", "May", "April") ~ "20182",
-    month %in% c("March", "February", "January") ~ "20181"),
-         period = as.yearqtr(format(period), "%Y%q"),
-         value = str_replace_all(value, "%", ""),
-         value = as.numeric(value)
-    )
-
-euribor18_q <- euribor18_q %>%
-  select(period, value) %>% 
-  group_by(period) %>%
-  summarise(average_euribor = round(mean(value),4))
-  
-euribor18_q
-```
-
-Saving **euribor_q** table.
-
-```{r}
-# write.csv(euribor18_q, file = "euribor_q.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
-```
-
-```{r}
-madrid_idealista <- madrid_idealista %>% 
-  full_join(euribor18_q, by = "period")
-```
+  annotate("text", x = 447500, y = 4467000, label = "Villa de \nVallecas", # 18
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 451000, y = 4472000, label = "Vicálvaro", # 19
+           size = 5, family = "Times New Roman") +
+  annotate("text", x = 448800, y = 4476100, label = "San Blas-\nCanillejas", # 20
+           size = 3.5, family = "Times New Roman") +
+  annotate("text", x = 451500, y = 4480500, label = "Barajas", # 21
+            size = 5, family = "Times New Roman") +
+  geom_segment(aes(x = 442500, y = 4480000, xend = 445300, yend = 4486600), # Chamartín
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 441000, y = 4480000, xend = 444300, yend = 4489000), # Tetuán
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 445000, y = 4477000, xend = 456500, yend = 4480000), # Ciudad Lineal
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 442500, y = 4475800, xend = 454000, yend = 4485600), # Salamanca
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 445000, y = 4473200, xend = 454000, yend = 4468000), # Moratalaz
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 442500, y = 4473200, xend = 454000, yend = 4466000), # Retiro
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 443000, y = 4469000, xend = 445900, yend = 4460800), # Puente de Vallecas
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 434000, y = 4461500, xend = 440400, yend = 4472500), # Arganzuela
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 430000, y = 4464000, xend = 436800, yend = 4469200), # Carabanchel
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 429000, y = 4472800, xend = 440400, yend = 4474500), # Centro
+             linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 429000, y = 4474500, xend = 440400, yend = 4476200), # Chamberí
+             linewidth = 0.5, color = "black")
+```
+
+## REFERENCES
 
-### 4.2.2. Airbnb
-
-[Datahippo Airbnb](https://datahippo.org/media/regions/4c7e35e4-46d3-4a82-baae-1a16d7d0ea48/599230508a46554e81f2887e_airbnb.csv)
-
-```{r}
-airbnb <- read_csv("Data/airbnb_data.csv", show_col_types = FALSE)
-
-airbnb
-```
-
-Check for no duplicates in Airbnb data.
-
-```{r}
-sum(duplicated(airbnb$id))
-```
-
-This database only cointains information up to the third quarter of the year 2018.
-
-```{r}
-min(airbnb$found)
-max(airbnb$found)
-```
-
-```{r}
-airbnb <- airbnb %>% 
-  select(id, longitude, latitude, found, revised, room_type, capacity) %>% 
-  rename(long = longitude, lat = latitude)
-```
-
-"Revised" is the last time found the dwelling in the platform. We are only going to consider those from 01th of January of 2018.
-
-```{r}
-airbnb <- airbnb %>% 
-  filter(revised >= as.Date("2018-01-01")) 
-```
-
-Creating the geometry for each dwelling.
-
-```{r}
-airbnb <- st_as_sf(airbnb, coords = c("long", "lat"), crs = 4326)
-
-airbnb
-```
-
-```{r}
-airbnb <- st_join(airbnb, Madrid_Polygons, join = st_within) %>% 
-  select(-c(LOCATIONID, ZONELEVELID)) %>% 
-  rename(neighbourhood = LOCATIONNAME)
-```
-
-Those homes that have an NA in their LOCATION is because they are from the Community of Madrid, but not from the City of Madrid, so there is no interest in working on them. They can be removed from the data.
-
-```{r}
-airbnb <- airbnb %>% 
-  filter(!is.na(neighbourhood))
-```
-
-Consult aggregated data by neighbourhood.
-
-```{r}
-airbnb %>%
-  group_by(neighbourhood) %>%
-  summarise(total_capacity = sum(capacity)) %>%
-  arrange(desc(total_capacity))
-```
-
-Separating houses in Airbnb by quarters (01 for the first, 02 for the second and 03 for the third).
-
-```{r}
-airbnb_q1 <- airbnb %>% 
-  filter(found < as.Date("2018-04-01")) 
-
-airbnb_q2 <- airbnb %>% 
-  filter(found < as.Date("2018-07-01") & revised > as.Date("2018-03-30") & revised < as.Date("2018-07-01")) 
-
-airbnb_q3 <- airbnb %>% 
-  filter(revised > as.Date("2018-06-30")) 
-```
-
-Adding each dataset its corresponding quarter.
-
-```{r}
-airbnb_q1 <- airbnb_q1 %>% 
-  mutate(period = as.yearqtr("2018 Q1", format = "%Y Q%q"))
-
-airbnb_q2 <- airbnb_q2 %>% 
-  mutate(period = as.yearqtr("2018 Q2", format = "%Y Q%q"))
-
-airbnb_q3 <- airbnb_q3 %>% 
-  mutate(period = as.yearqtr("2018 Q3", format = "%Y Q%q"))
-```
-
-Reaching to the final aggregated Airbnb information by quarters.
-
-```{r}
-airbnb_ag <- rbind(airbnb_q1, airbnb_q2, airbnb_q3)
-```
-
-There are Airbnb dwellings operating in more than one quarter of the year.
-
-```{r}
-sum(duplicated(airbnb_ag$id))
-```
-
-```{r message = FALSE}
-airbnb_final <- airbnb_ag %>%
-  group_by(neighbourhood, period) %>%
-  summarise(n_houses_airbnb = n(),
-            n_places_airbnb = sum(capacity)) %>% 
-  st_drop_geometry()
-
-airbnb_final
-```
-
-Saving **airbnb_final** table.
-
-```{r}
-# write.csv(airbnb_final, file = "airbnb_final.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
-```
-
-To have in the same dataset geometry and separated longitude and latitude information.
-
-```{r}
-madrid_idealista <- st_as_sf(madrid_idealista, coords = c("long", "lat"), crs = 4326) %>% 
-  mutate(long = st_coordinates(geometry)[, 1],
-         lat = st_coordinates(geometry)[, 2])
-```
-
-Neighbourhoods resulting in NA are because they do not have any Airbnb house surrounding.
-
-```{r}
-madrid_idealista <- madrid_idealista %>% 
-  filter(period != "2018 Q4")
-
-madrid_idealista <- madrid_idealista %>% 
-  # st_drop_geometry() %>% 
-  full_join(airbnb_final, by = c("neighbourhood", "period"))
-
-madrid_idealista <- madrid_idealista %>%
-  mutate(n_houses_airbnb = replace_na(n_houses_airbnb, 0),
-         n_places_airbnb = replace_na(n_places_airbnb, 0))
-```
-
-### 4.2.3. Parks and green areas
-
-```{r message = FALSE}
-parks <- read_delim("Data/parks_green_areas.csv", delim = ";", show_col_types = FALSE) %>% 
-  select(c(NOMBRE, LATITUD, LONGITUD)) %>% 
-  rename(name = NOMBRE, lat = LATITUD, long = LONGITUD)
-```
-
-```{r}
-parks <- st_as_sf(parks, coords = c("long", "lat"), crs = 4326) %>% 
-  mutate(long = st_coordinates(geometry)[, 1],
-         lat = st_coordinates(geometry)[, 2])
-data("Madrid_Polygons")
-Madrid_Polygons
-```
-
-```{r}
-madrid_idealista <- madrid_idealista %>%
-  mutate(park_proximity = st_distance(., parks) %>% apply(1, min),
-         park_proximity_km = park_proximity / 1000) %>% select(-park_proximity)
-```
-
-Aluche example distance calculation (to Parque Aluche)
-
-```{r}
-# A2589730015233487221 Aluche ~= coord park
-# A1827641402258800038 Aluche a bit further
-
-madrid_idealista %>% select(id, park_proximity_km) %>% filter(id == "A2589730015233487221" | id == "A1827641402258800038")
-```
-
-Opera example distance calculation (to Jardines de Sabatini)
-
-```{r}
-# A12651484524718559564 Opera (Palacio) near to Jardines de Sabatini
-# A16593819002392137683 Opera (Palacio) a bit further
-madrid_idealista %>% select(id, park_proximity_km) %>% filter(id == "A12651484524718559564" | id == "A16593819002392137683")
-```
-
-### 4.2.4. Educational centers
-
-[Educational centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=f14878a6d4556810VgnVCM1000001d4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
-
-```{r message = FALSE}
-educational_centers <- read_delim("Data/educational_centers.csv", delim = ";",
-                                  show_col_types = FALSE) %>% 
-  select(NOMBRE, LONGITUD, LATITUD) %>% 
-  rename(name = NOMBRE, long = LONGITUD, lat = LATITUD) %>% 
-  drop_na() # drop 5 centers without location
-```
-
-Converting to an sf object.
-
-```{r}
-educational_centers <- st_as_sf(educational_centers, coords = c("long", "lat"), crs = 4326) %>% 
-  mutate(long = st_coordinates(geometry)[, 1],
-         lat = st_coordinates(geometry)[, 2])
-```
-
-```{r}
-madrid_idealista <- madrid_idealista %>%
-  mutate(educ_center_proximity = st_distance(., educational_centers) %>% apply(1, min),
-         educ_center_proximity_km = educ_center_proximity / 1000) %>% select(-educ_center_proximity)
-```
-
-### 4.2.5. Health centers
-
-[Health centers](https://datos.madrid.es/sites/v/index.jsp?vgnextoid=da7437ac37efb410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD)
-
-```{r message = FALSE}
-health_centers <- read_delim("Data/health_centers.csv", delim = ";", show_col_types = FALSE) %>% 
-  select(NOMBRE, LONGITUD, LATITUD) %>%
-  rename(name = NOMBRE, long = LONGITUD, lat = LATITUD)
-```
-
-Remove drug and addictions centers.
-
-```{r message = FALSE}
-health_centers <- health_centers %>% 
-  filter(!str_detect(name, "CAD|CCAD|CAID"))
-```
-
-```{r}
-health_centers <- st_as_sf(health_centers, coords = c("long", "lat"), crs = 4326) %>% 
-  mutate(long = st_coordinates(geometry)[, 1],
-         lat = st_coordinates(geometry)[, 2])
-```
-
-```{r}
-madrid_idealista <- madrid_idealista %>%
-  mutate(health_center_proximity = st_distance(., health_centers) %>% apply(1, min),
-         health_center_proximity_km = health_center_proximity / 1000) %>%
-  select(-health_center_proximity)
-```
-
-Saving the final dataset into a .csv
-
-```{r}
-# madrid_idealista_to_save <- as.data.frame(st_drop_geometry(madrid_idealista))
-```
-
-```{r}
-# write.csv(madrid_idealista_to_save, file = "madrid_idealista.csv", row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
-```
-
-## 5. Exploratory data analysis
-
-This section dedicated to exploring duplications in data. 
-
-Dataset with houses repeated more than once (including all rows).
-
-```{r}
-exploratory <- idealista18 %>% 
-  group_by(id) %>%
-  filter(n() > 1) %>% 
-  arrange(id)
-
-exploratory <- exploratory %>%
-  group_by(id) %>% 
-  mutate(across(c(north_orientation, south_orientation, east_orientation, 
-                  west_orientation), ~max(.)))
-
-exploratory <- exploratory %>% 
-  mutate(orientation = as_factor(case_when(
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "None",
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "0" ~ "Low", # north
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # west
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # east
-  north_orientation == "0" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # east-west
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "0" & west_orientation == "1" ~ "Medium", # north-west
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "0" ~ "Medium", # north-east
-  north_orientation == "1" & south_orientation == "0" & east_orientation == "1" & west_orientation == "1" ~ "Medium", # north-east-west
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-west
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-east
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "0" ~ "Good", # south-north
-  north_orientation == "0" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Good", # south-east-west
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "0" ~ "Good", # south-north-east
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "0" & west_orientation == "1" ~ "Good", # south-north-west
-  north_orientation == "1" & south_orientation == "1" & east_orientation == "1" & west_orientation == "1" ~ "Full")),
-         period = case_when(period == 201803 ~ "20181",
-                            period == 201806 ~ "20182",
-                            period == 201809 ~ "20183",
-                            period == 201812 ~ "20184"),
-         period = as.yearqtr(format(period), "%Y%q")) %>% 
-  select(-c(north_orientation, south_orientation, east_orientation, west_orientation))
-
-exploratory
-```
-
-```{r}
-variations <- exploratory %>% 
-  group_by(id) %>% 
-  summarise(price_min = min(price_sq_m),
-            price_max = max(price_sq_m),
-            price_variation = ((price_max - price_min)/price_min)*100)
-
-variations
-```
-
-Average variation in the price of a square meter.
-
-```{r}
-sum(is.na(variations$price_variation))
-mean(variations$price_variation)
-```
-
-Orientation: dwellings with no location.
-
-```{r}
-exploratory
-```
-
-Mean antiquity of buildings with no orientation is more than 55 years. 
-
-```{r}
-exploratory_orientation <- exploratory %>% 
-  group_by(id) %>% 
-  filter(orientation == "None") %>% 
-  slice(1) # select the first row that satisfies the condition
- 
-mean(exploratory_orientation$year_built)
-```
 
 
 
