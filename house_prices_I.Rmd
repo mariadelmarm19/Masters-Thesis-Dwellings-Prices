@@ -3,14 +3,14 @@ title: "Master's Thesis"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
-description: "This is the first .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document ***** that can be found in this repository. This markdown contains the code needed for conducting the analysis until point 2. ANALYSIS OF THE SITUATION included."
+description: "This is the first .Rmd document from a set of three. Code provided is complemetary to the main document containing the Master's Thesis in *Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market*, which can be found in this repository. This markdown contains the code needed for conducting the analysis until point 2. ANALYSIS OF THE SITUATION included."
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, fig.align = "center")
 ```
 
-Loading libraries.
+Load libraries.
 
 ```{r message = FALSE, warning = FALSE}
 # General libraries:
@@ -24,19 +24,14 @@ library(httr)
 library(scrapex)
 library(rvest) # read_html
 
-# Libraries for editing plots and tables:
+# Plots and tables edition:
 library(ggplot2)
 library(RColorBrewer)
-library(wordcloud)
 library(sf) # geometry polygons
 library(zoo) # date (quarters)
-library(leaflet) # maps
 
 # Times New Roman font import:
 library(extrafont)
-
-# Operations with geodata
-library(geosphere)
 ```
 
 ## 1. INTRODUCTION
@@ -55,13 +50,9 @@ No code
 
 ## 2. ANALYSIS OF THE SITUATION
 
-### Prices of dwellings in Spain
+### 2.1. Prices of dwellings in Spain
 
 #### Plot 1: Housing Price Index (HPI) variation over time (quarters)
-
-Source: [INE](https://www.ine.es/jaxiT3/Datos.htm?t=25171)
-
-[Dataviz](https://csslab.uc3m.es/dataviz/)
 
 Reading raw data from .csv file.
 
@@ -99,15 +90,12 @@ hpi <- hpi %>%
   mutate(Period = as.yearqtr(format(Period), "%Y%q"))
 ```
 
-- Times New Roman font is not available in R by default. It should be imported.
-
-The decision in this case has been to import all fonts in this device and see that Times New Roman is already installed,
-so it can be used now in R.
+- By default, R may not have *Times New Roman* font available for use in plots. However, this font is commonly installed on most operating systems. To ensure its availability in R, the user should consult the following commented chunk.
 
 ```{r}
-# font_import()
-# loadfonts(device = "win")
-# fonts() to consult available fonts to use in R
+# font_import() # to import all fonts from the device
+# loadfonts(device = "win") # to load fonts in the session and use them in plots  
+# fonts() # to check the available fonts for use in R
 ```
 
 - Plot.
@@ -126,15 +114,13 @@ hpi %>%
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_rect(fill = "white"),
-        legend.spacing.y = unit(0.03, "cm"), # adjust legend box
+        legend.spacing.y = unit(0.03, "cm"), # to adjust legend box
         legend.key = element_rect(fill = "transparent"),
         text = element_text(family = "Times New Roman", size = 18, color = "black")) +
-  scale_color_manual(values = c("darkblue", "red")) +
-  geom_hline(yintercept = 0, 
-             linetype = "dashed", 
-             color = "black", linewidth = 0.5) +
+  scale_color_manual(values = c("darkblue", "orangered")) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
   scale_y_continuous(limits = c(-7.5, 7.5), breaks = seq(-7.5, 7.5, by = 3),
-                     labels = function(x) paste0(x, "%")) + # Add "%" symbol to y-labels
+                     labels = function(x) paste0(x, "%")) + # to add "%" symbol to y-labels
   scale_x_yearqtr(format = "%Y", # format = "%YQ%q" to put QX after each label
                   limits = c(min(hpi$Period), max(hpi$Period)),
                   breaks = seq(from = min(hpi$Period), to = max(hpi$Period), by = 1),
@@ -144,28 +130,28 @@ hpi %>%
              color = "grey")
 ```
 
-#### Data bank from Madrid Council - Statistical information
+### 2.2. Prices of dwellings in the City of Madrid
 
-Evolution of the average price per square meter by district and neighbourhood (City of Madrid)
+#### Data bank from Madrid Council - Statistical information (for plots 2 and 3)
 
-Full data:
+Loading full raw data:
 
 ```{r}
 madrid_m2 <- read_delim("Data/price_m2_Madrid_district_neighbourhood.csv", 
                         delim = ";", skip = 5, 
-                        n_max = 161, # skip last 4 rows
+                        n_max = 161, # to skip last 4 rows
                         col_names = c("District", "Neighbourhood", "2017", "2018", "2019", "2020", "2021", "2022"),
                         show_col_types = FALSE) %>% 
-  mutate(across(starts_with("20"), ~as.numeric(str_replace_all(., "\\.", "")))) # substitute dots per nothing and convert to numeric
+  mutate(across(starts_with("20"), ~as.numeric(str_replace_all(., "\\.", "")))) # to substitute dots per nothing and convert to numeric
 
 madrid_m2
 ```
 
-#### Plot 2: Average price per square meter of second-hand dwellings by District in 2022 (€ per square meter) & Increase in price per square meter: 2017 vs. 2022, in %
+#### Plot 2: Average price per square meter of second-hand dwellings by District in 2022, in euros. Increase in price per square meter: 2017 vs. 2022, in %
 
 ```{r}
 madrid_districts <- madrid_m2 %>%
-  filter(str_detect(Neighbourhood, '^\\d{2}\\.') | Neighbourhood == "Ciudad de Madrid") %>% # de la columna de neighbourhood que empiece por dos dígitos, seguido por un punto
+  filter(str_detect(Neighbourhood, '^\\d{2}\\.') | Neighbourhood == "Ciudad de Madrid") %>% # to select from the "Neighbourhood" column rows starting by two digits, followed by a dot or rows which are "Ciudad de Madrid"
   rename("remove" = "District", "District" = "Neighbourhood") %>%
   select(-"remove")
 
@@ -174,10 +160,16 @@ madrid_districts
 
 ```{r}
 madrid_districts <- madrid_districts %>%
-  mutate(District = gsub("^\\d{2}\\.\\s*", "", District),
-         District = ifelse(District == "Ciudad de Madrid", "City of Madrid", District),
-         Variation = round(((`2022` - `2017`) / `2017`) * 100, 2))
+  mutate(District = gsub("^\\d{2}\\.\\s*", "", District), # to remove two initial digits and point from each row in "District"
+         District = ifelse(District == "Ciudad de Madrid", "City of Madrid", District), # to manually translate into English
+         Variation = round(((`2022` - `2017`) / `2017`) * 100, 2)) # to create a new column with the increase between first and last year
+
+madrid_districts
 ```
+
+Plotting:
+
+- Preparing data in long format.
 
 ```{r}
 madrid_longer <- madrid_districts %>%
@@ -186,23 +178,31 @@ madrid_longer <- madrid_districts %>%
 madrid_longer
 ```
 
+- Plot.
+
 ```{r fig.height = 5, fig.width = 8.5}
 madrid_longer %>%
   filter(Year == "2022") %>%
-  ggplot(aes(x = reorder(District, `price per m2`), y = `price per m2`)) +
+  ggplot(aes(x = reorder(District, `price per m2`), y = `price per m2`, fill = (District == "City of Madrid"))) +
   labs(x = NULL, y = NULL) +
-  geom_bar(stat = "identity", fill = "darkblue") +
+  geom_bar(stat = "identity") +
   coord_flip() +
-  geom_rect(xmin = -Inf, xmax = Inf, ymin = 6900, ymax = 7900, fill = "lightblue") +
-  geom_text(aes(label = `price per m2`), hjust = 1.1, nudge_x = 0.1, color = "white", family = "Times New Roman", size = 5, fontface = "bold") +
+  geom_rect(xmin = -Inf, xmax = Inf, ymin = 6900, ymax = 7900, fill = "darkslategray2") +
+  geom_text(aes(label = `price per m2`), 
+            hjust = 1.1, nudge_x = 0.1, color = "white", family = "Times New Roman", size = 5, fontface = "bold") +
   scale_y_continuous(limits = c(0, 7900), expand = c(0, 0), breaks = NULL) +
-  geom_text(data = madrid_longer %>% filter(Year == "Variation"), aes(x = District, y = 7400, label = paste0(`price per m2`, "%")), vjust = 0.35, family = "Times New Roman", size = 5, fontface = "bold") +
+  geom_text(data = madrid_longer %>% filter(Year == "Variation"), 
+            aes(x = District, y = 7400, label = paste0(`price per m2`, "%")), 
+            vjust = 0.35, family = "Times New Roman", size = 5, fontface = "bold") +
   theme_minimal() +
   theme(text = element_text(family = "Times New Roman", size = 20),
-        axis.text.y = element_text(vjust = 0.35, color = "black")) # Manejar la altura de los distritos con respecto a las barras
+        axis.text.y = element_text(vjust = 0.35, color = "black")) +
+  scale_fill_manual(values = c("TRUE" = "orangered", "FALSE" = "darkblue"), guide = "none") # to fill "City of Madrid" distinct from distrits
 ```
 
 #### Plot 3: Average price per sq meter of Districts in Madrid
+
+- Filtering to remove aggregated data from *City of Madrid* and leave only data from individual districts.
 
 ```{r}
 madrid_map <- madrid_m2 %>% 
@@ -213,10 +213,10 @@ madrid_map <- madrid_m2 %>%
 madrid_map
 ```
 
-[Geodata 21 districts from Madrid municipality](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=7d6e5eb0d73a7710VgnVCM2000001f4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default)
+- Loading geospatial data to create the map of Madrid and its districts.
 
 ```{r}
-geodata_districts <- read_sf(dsn = "./Data", # "." = current directory
+geodata_districts <- read_sf(dsn = "./Data", # "." means current directory
   layer = "Geodata_Districts")
 
 geodata_districts <- geodata_districts %>% 
@@ -229,9 +229,15 @@ geodata_districts <- geodata_districts %>%
 geodata_districts
 ```
 
+- Adding to each district its corresponding geometry polygon. 
+
 ```{r}
 madrid_map <- madrid_map %>% left_join(geodata_districts, by = "District")
+
+madrid_map
 ```
+
+- Plot. Two digit code of each district and name is placed after code sections for a better understanding.
 
 ```{r fig.height = 6, fig.width = 8.5}
 madrid_map %>%
@@ -247,74 +253,78 @@ ggplot(aes(fill = `2022`, geometry = geometry)) +
         legend.direction = "vertical",
         legend.text = element_text(size = 15),
         plot.margin = margin(0, 0, 0, 0, "pt"))  +
-  annotate("text", x = 426800, y = 4472900, label = "Centro", # 1 OK
+  annotate("text", x = 426800, y = 4472900, label = "Centro", # 01.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 434000, y = 4461000, label = "Arganzuela", # 2 OK
+  annotate("text", x = 434000, y = 4461000, label = "Arganzuela", # 02.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 456500, y = 4466000, label = "Retiro", # 3 OK
+  annotate("text", x = 456500, y = 4466000, label = "Retiro", # 03.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 457000, y = 4486500, label = "Salamanca", # 4
+  annotate("text", x = 457000, y = 4486500, label = "Salamanca", # 04.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 448200, y = 4487500, label = "Chamartín", # 5 OK
+  annotate("text", x = 448200, y = 4487500, label = "Chamartín", # 05.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 445500, y = 4490000, label = "Tetuán", # 6 OK
+  annotate("text", x = 445500, y = 4490000, label = "Tetuán", # 06.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 425900, y = 4474600, label = "Chamberí", # 7 OK
+  annotate("text", x = 425900, y = 4474600, label = "Chamberí", # 07. 
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 435000, y = 4487500, label = "Fuencarral-\nEl Pardo", # 8
+  annotate("text", x = 435000, y = 4487500, label = "Fuencarral-\nEl Pardo", # 08.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 436800, y = 4477500, label = "Moncloa-\nAravaca", # 9
+  annotate("text", x = 436800, y = 4477500, label = "Moncloa-\nAravaca", # 09.
            size = 4, family = "Times New Roman") +
-  annotate("text", x = 433000, y = 4470500, label = "Latina", # 10
+  annotate("text", x = 433000, y = 4470500, label = "Latina", # 10.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 427500, y = 4463000, label = "Carabanchel", # 11
+  annotate("text", x = 427500, y = 4463000, label = "Carabanchel", # 11.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 440400, y = 4469200, label = "Usera", # 12
+  annotate("text", x = 440400, y = 4469200, label = "Usera", # 12.
            size = 3.5, family = "Times New Roman") +
-  annotate("text", x = 451000, y = 4460000, label = "Puente de Vallecas", # 13
+  annotate("text", x = 451000, y = 4460000, label = "Puente de Vallecas", # 13.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 457500, y = 4468000, label = "Moratalaz", # 14
+  annotate("text", x = 457500, y = 4468000, label = "Moratalaz", # 14.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 459000, y = 4480000, label = "Ciudad \nLineal", # 15
+  annotate("text", x = 459000, y = 4480000, label = "Ciudad \nLineal", # 15.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 446200, y = 4482500, label = "Hortaleza", # 16
+  annotate("text", x = 446200, y = 4482500, label = "Hortaleza", # 16.
            size = 4, family = "Times New Roman") +
-  annotate("text", x = 441000, y = 4466000, label = "Villaverde", # 17
+  annotate("text", x = 441000, y = 4466000, label = "Villaverde", # 17.
            size = 3.5, family = "Times New Roman") +
-  annotate("text", x = 447500, y = 4467000, label = "Villa de \nVallecas", # 18
+  annotate("text", x = 447500, y = 4467000, label = "Villa de \nVallecas", # 18.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 451000, y = 4472000, label = "Vicálvaro", # 19
+  annotate("text", x = 451000, y = 4472000, label = "Vicálvaro", # 19.
            size = 5, family = "Times New Roman") +
-  annotate("text", x = 448800, y = 4476100, label = "San Blas-\nCanillejas", # 20
+  annotate("text", x = 448800, y = 4476100, label = "San Blas-\nCanillejas", # 20.
            size = 3.5, family = "Times New Roman") +
-  annotate("text", x = 451500, y = 4480500, label = "Barajas", # 21
+  annotate("text", x = 451500, y = 4480500, label = "Barajas", # 21.
             size = 5, family = "Times New Roman") +
-  geom_segment(aes(x = 442500, y = 4480000, xend = 445300, yend = 4486600), # Chamartín
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 441000, y = 4480000, xend = 444300, yend = 4489000), # Tetuán
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 445000, y = 4477000, xend = 456500, yend = 4480000), # Ciudad Lineal
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 442500, y = 4475800, xend = 454000, yend = 4485600), # Salamanca
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 445000, y = 4473200, xend = 454000, yend = 4468000), # Moratalaz
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 442500, y = 4473200, xend = 454000, yend = 4466000), # Retiro
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 443000, y = 4469000, xend = 445900, yend = 4460800), # Puente de Vallecas
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 434000, y = 4461500, xend = 440400, yend = 4472500), # Arganzuela
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 430000, y = 4464000, xend = 436800, yend = 4469200), # Carabanchel
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 429000, y = 4472800, xend = 440400, yend = 4474500), # Centro
-             linewidth = 0.5, color = "black") +
-  geom_segment(aes(x = 429000, y = 4474500, xend = 440400, yend = 4476200), # Chamberí
-             linewidth = 0.5, color = "black")
+  geom_segment(aes(x = 429000, y = 4472800, xend = 440400, yend = 4474500), # 01. Centro
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 434000, y = 4461500, xend = 440400, yend = 4472500), # 02. Arganzuela
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 442500, y = 4473200, xend = 454000, yend = 4466000), # 03. Retiro
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 442500, y = 4475800, xend = 454000, yend = 4485600), # 04. Salamanca
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 442500, y = 4480000, xend = 445300, yend = 4486600), # 05. Chamartín
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 441000, y = 4480000, xend = 444300, yend = 4489000), # 06. Tetuán
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 429000, y = 4474500, xend = 440400, yend = 4476200), # 07. Chamberí
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 430000, y = 4464000, xend = 436800, yend = 4469200), # 11. Carabanchel
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 443000, y = 4469000, xend = 445900, yend = 4460800), # 13. Puente de Vallecas
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 445000, y = 4473200, xend = 454000, yend = 4468000), # 14. Moratalaz
+               linewidth = 0.5, color = "black") +
+  geom_segment(aes(x = 445000, y = 4477000, xend = 456500, yend = 4480000), # 15. Ciudad Lineal
+               linewidth = 0.5, color = "black")
 ```
 
 ## REFERENCES
 
+CSSLab UC3M (2023). Data Visualization: Principles and Practice. Retrieved April 4, 2023, from https://csslab.uc3m.es/dataviz/
 
+National Institute for Statistics – Spain. (2023). Índice de Precios de Vivienda [Housing Price Index]. Retrieved March 15, 2023, from https://www.ine.es/jaxiT3/Datos.htm?t=25171
 
+Open Data Portal of Madrid City Council. (2023). Evolution of the price of second-hand housing (€ per square meter) by District and Neighbourhood. Retrieved April 2, 2023, from https://www-s.madrid.es/CSEBD_WBINTER/seleccionSerie.html?numSerie=0504030000202
 
+Open Data Portal of Madrid City Council. (2021). Madrid municipal districts (geospatial data). Retrieved May 15, 2023, from https://www-s.madrid.es/CSEBD_WBINTER/seleccionSerie.html?numSerie=0504030000202
