@@ -197,7 +197,6 @@ plot(rforest)
 ```{r}
 results$rforest <- predict(rforest, testing)
 rforest_m <- postResample(pred = results$rforest,  obs = results$price_sq_m)
-map <- NULL
 varImp(rforest)
 ```
 
