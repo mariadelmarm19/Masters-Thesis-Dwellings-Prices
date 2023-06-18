@@ -1,0 +1,300 @@
+---
+title: "TFM"
+author: "Maria del Mar Escalas Martorell"
+date: "`r Sys.Date()`"
+output: html_document
+description: "This is the third .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document containing the Master's Thesis in *Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market*, which can be found in this repository. This markdown contains the code needed for conducting the analysis of point 4. MODELLING."
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, fig.align = "center")
+```
+
+Load libraries.
+
+```{r message = FALSE, warning = FALSE}
+# General libraries:
+library(tidyverse)
+
+# Times New Roman:
+library(extrafont)
+
+# Libraries for editing plots and tables:
+library(ggplot2)
+library(ggpubr) # to arrange plots
+library(corrplot) # correlation plot
+
+# Libraries for modelling
+library(caret)
+library(olsrr)
+```
+
+## 4. MODELLING
+
+Reading data into R and re-check for no NAs: *madrid_idealista.csv* is obtained in the second .Rmd of this collection of three. User can run the code to get it or download it directly from the repostory where this .Rmd is found.
+
+```{r}
+data <- read_csv("madrid_idealista.csv", show_col_types = FALSE) %>%
+  mutate(across(c(terrace, lift, air_cond, parking, boxroom, wardrobe, pool, doorman, garden, external), as.factor))
+
+sapply(data, function(x) sum(is.na(x))*100/nrow(data)) # % of NAs per row
+```
+
+### 4.1. Exploratory data analysis
+
+```{r}
+dim(data) # rows and columns
+```
+
+```{r}
+summary(data)
+```
+
+#### Plot 5: Distribution of the target variable *price_sq_m*.
+
+```{r fig.height = 2.5, fig.width = 3}
+p1 <- data %>% 
+  ggplot(aes(x=price_sq_m)) + 
+  geom_density(fill="darkblue") + 
+  theme_minimal() +
+  theme(text = element_text(family = "Times New Roman"))
+p1
+```
+
+Log-transformation of the target variable *price_sq_m*.
+
+```{r fig.height = 2.5, fig.width = 3}
+p2 <- data %>% 
+  ggplot(aes(x=price_sq_m)) + 
+  geom_density(fill="darkblue") + 
+  scale_x_log10() + 
+  theme_minimal() +
+  theme(text = element_text(family = "Times New Roman"))
+p2
+```
+
+```{r fig.height = 2.5, fig.width = 6}
+ggarrange(p1, p2)
+```
+
+#### Plot 6: Matrix of correlations between numeric variables
+
+```{r}
+numeric_corrplot <- data %>% select(n_room, n_bath, year_built, floors, n_dwelling, km_to_center, metro_proximity, average_euribor, long, lat, n_houses_airbnb, n_places_airbnb, park_proximity, educ_center_proximity, health_center_proximity)
+```
+
+```{r fig.height = 7, fig.width = 7}
+corrplot(cor(numeric_corrplot),
+         method = "color",
+         type = "upper",
+         order = "hclust",
+         addCoef.col = "black",
+         tl.col = "black",
+         number.cex = 0.8,
+         tl.cex = 0.7,
+         tl.srt = 45,
+         family = "Times New Roman",
+         number.font = 6, # Times New Roman for numbers inside the plot
+         cl.pos="n") # No legend
+```
+
+### 4.2. Applied techniques
+
+Splitting data into training and testing sets
+
+```{r}
+set.seed(1999)
+in_train <- createDataPartition(data$price_sq_m, p = 0.75, list = FALSE)  # 75% for training
+training <- data[ in_train,]
+testing <- data[-in_train,]
+```
+
+```{r}
+variables1 <- log(price_sq_m) ~ n_room + n_bath + terrace + lift + air_cond + parking + boxroom + wardrobe + pool + doorman +
+  garden + external + year_built + floors + n_dwelling + km_to_center + metro_proximity + orientation +
+  average_euribor + long + lat + n_houses_airbnb + n_places_airbnb + park_proximity + educ_center_proximity + health_center_proximity
+```
+
+Creating a dataframe to store the different results from the different models tried.
+
+```{r}
+results <- data.frame(price_sq_m = log(testing$price_sq_m))
+```
+
+Incorporating five-fold cross validation technique.
+
+```{r}
+ctrl <- trainControl(method = "repeatedcv", 
+                     number = 5, repeats = 1)
+```
+
+Linear regression
+
+```{r}
+linear_cv <- train(variables1, 
+                    data = training,
+                    method = "lm",
+                    preProc = c('scale', 'center'),
+                    trControl = ctrl)
+linear_cv
+```
+
+```{r}
+summary(linear_cv)
+```
+
+Prediction - linear
+
+```{r}
+results$lm <- predict(linear_cv, testing)
+linear_m <- postResample(pred = results$lm,  obs = results$price)
+linear_m
+```
+
+```{r}
+ggplot(data = results, aes(x = lm, y = price_sq_m)) +
+  geom_point(data = subset(results, lm > 0)) +
+  labs(title = "Linear Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
+  geom_abline(intercept = 0, slope = 1, colour = "blue") +
+  theme_bw()
+```
+
+KNN
+
+```{r}
+knn <- train(variables1, 
+             data = training,
+             method = "kknn", # k-Nearest Neighbors algorithm
+             preProc=c('scale','center'), # all variables in the same scale and mean = 0
+             tuneGrid = data.frame(kmax=c(6,13,15,19,21),distance=2,kernel='optimal'), # kmax = maximum value of k to be considered in the k - Nearest Neighbors algorithm
+             # Distance = 2 = Euclidean Distance
+             trControl = ctrl,
+             importance = TRUE)
+plot(knn)
+```
+
+```{r}
+results$knn <- predict(knn, testing)
+knn_m <- postResample(pred = results$knn,  obs = results$price_sq_m)
+
+```
+
+Random Forest
+
+```{r}
+rforest <- train(variables1, 
+                 data = training,
+                 method = "rf",
+                 preProc=c('scale','center'),
+                 trControl = ctrl,
+                 ntree = 100,
+                 tuneGrid = data.frame(mtry=c(1,9,18,27)), # esto es lo de randomly selected predictors, en nuestro caso podría ser c(1, 9, 18, 27) había 1, 3, 5, 7
+                 importance = TRUE) # variable importance measures to be computed
+
+plot(rforest)
+```
+
+```{r}
+results$rforest <- predict(rforest, testing)
+rforest_m <- postResample(pred = results$rforest,  obs = results$price_sq_m)
+map <- NULL
+varImp(rforest)
+```
+
+```{r}
+ggplot(data = results, aes(x = rforest, y = price_sq_m)) +
+  geom_point(data = subset(results, lm > 0)) +
+  labs(title = "Forward Regression Observed vs Predicted", x = "Predicted", y = "Observed") +
+  geom_abline(intercept = 0, slope = 1, colour = "blue") +
+  theme_bw()
+```
+
+Gradient Boosting
+
+```{r warning = FALSE}
+xgboost <- train(variables1, 
+                  data = training,
+                  method = "xgbTree",
+                  preProc=c('scale','center'),
+                  trControl = ctrl,
+                  tuneGrid = expand.grid(nrounds = c(500,700), 
+                                         max_depth = c(5,6,7), 
+                                         eta = c(0.01, 0.1, 1),
+                                         gamma = c(1, 2, 3), 
+                                         colsample_bytree = c(0.5, 1),
+                                         min_child_weight = c(1), 
+                                         subsample = c(0.2,0.5,0.8)))
+```
+
+```{r}
+results$xgboost <- predict(xgboost, testing)
+xgboost_m <- postResample(pred = results$xgboost,  obs = results$price_sq_m)
+```
+
+### 4.3. Results
+
+Presentation of all results together:
+
+- Creating a table to store results from each model:
+
+```{r}
+linear_results <- data.frame(
+  Algorithm = "Linear",
+  RMSE = linear_m[["RMSE"]],
+  Rsquared = linear_m[["Rsquared"]],
+  MAE = linear_m[["MAE"]],
+  "Time to run" = "1s"
+)
+
+knn_results <- data.frame(
+  Algorithm = "KNN",
+  RMSE = knn_m[["RMSE"]],
+  Rsquared = knn_m[["Rsquared"]],
+  MAE = knn_m[["MAE"]],
+  "Time to run" = "25 min"
+)
+
+rforest_results <- data.frame(
+  Algorithm = "Random Forest",
+  RMSE = rforest_m[["RMSE"]],
+  Rsquared = rforest_m[["Rsquared"]],
+  MAE = rforest_m[["MAE"]],
+  "Time to run" = "1h 30 min"
+)
+
+xgboost_results <- data.frame(
+  Algorithm = "Gradient Boosting",
+  RMSE = xgboost_m[["RMSE"]],
+  Rsquared = xgboost_m[["Rsquared"]],
+  MAE = xgboost_m[["MAE"]],
+  "Time to run" = "5h 30 min"
+)
+```
+
+- Joining rows:
+
+```{r}
+all_results <- rbind(linear_results, knn_results, rforest_results, xgboost_results)
+colnames(all_results)[colnames(all_results) == "Time.to.run"] <- "Time to run"
+
+all_results
+```
+
+## REFERENCES
+
+Datahippo. (2018). Datahippo.org. Madrid (Provincia): Datos básicos Airbnb. Retrieved April 17, 2023, from https://datahippo.org/es/region/599230b08a46554edf88466b/
+
+Expansion.com. (2019). Euribor 2018 - Histórico Euribor 2018. Datosmacro. Retrieved April 21, 2023, from https://datosmacro.expansion.com/hipotecas/euribor?anio=2018
+
+Medina M. (2023). R Programming. University Carlos III of Madrid.
+
+Nogales J. (2023). Advanced Modelling - Regression: Home Price Prediction. University Carlos III of Madrid. 
+
+Open Data Portal of Madrid City Council. (2023). Educational centers in Madrid. Retrieved May 3, 2023, from https://datos.madrid.es/sites/v/index.jsp?vgnextoid=f14878a6d4556810VgnVCM1000001d4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD
+
+Open Data Portal of Madrid City Council. (2023). Main parks and municipal gardens in Madrid. Retrieved May 3, 2023, from https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=dc758935dde13410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default
+
+Open Data Portal of Madrid City Council. (2023). Medical care centers in Madrid. Retrieved May 3, 2023, from https://datos.madrid.es/sites/v/index.jsp?vgnextoid=da7437ac37efb410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD
+
+Rey-Blanco D., Arbués P., Lopez F., Páez A. (2021). idealista18: Idealista 2018 Data Package. R package version 0.1.1. URL: https://paezha.github.io/idealista18/
+
