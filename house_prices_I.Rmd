@@ -2,8 +2,9 @@
 title: "Master's Thesis"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
-output: html_document
-description: "This is the first .Rmd document from a set of three. Code provided is complemetary to the main document containing the Master's Thesis in *Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market*, which can be found in this repository. This markdown contains the code needed for conducting the analysis until point 2. ANALYSIS OF THE SITUATION included."
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -17,12 +18,6 @@ Load libraries.
 library(tidyverse)
 library(stringr) # regex
 library(lubridate) # operations with dates
-
-# Web scraping libraries:
-library(xml2)
-library(httr)
-library(scrapex)
-library(rvest) # read_html
 
 # Plots and tables edition:
 library(ggplot2)
@@ -322,6 +317,8 @@ ggplot(aes(fill = `2022`, geometry = geometry)) +
 ## REFERENCES
 
 CSSLab UC3M (2023). Data Visualization: Principles and Practice. Retrieved April 4, 2023, from https://csslab.uc3m.es/dataviz/
+
+Medina M. (2023). R Programming. University Carlos III of Madrid.
 
 National Institute for Statistics – Spain. (2023). Índice de Precios de Vivienda [Housing Price Index]. Retrieved March 15, 2023, from https://www.ine.es/jaxiT3/Datos.htm?t=25171
 

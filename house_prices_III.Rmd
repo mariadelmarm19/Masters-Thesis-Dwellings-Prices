@@ -3,7 +3,6 @@ title: "TFM"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
-description: "This is the third .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document containing the Master's Thesis in *Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market*, which can be found in this repository. This markdown contains the code needed for conducting the analysis of point 4. MODELLING."
 ---
 
 ```{r setup, include=FALSE}
@@ -27,11 +26,12 @@ library(corrplot) # correlation plot
 # Libraries for modelling
 library(caret)
 library(olsrr)
+library(pdp)
 ```
 
 ## 4. MODELLING
 
-Reading data into R and re-check for no NAs: *madrid_idealista.csv* is obtained in the second .Rmd of this collection of three. User can run the code to get it or download it directly from the repostory where this .Rmd is found.
+Reading data into R and re-check for no NAs: *madrid_idealista.csv* is obtained in the second .Rmd of this collection of three. User can run the code to get it or download it directly from the repository where this .Rmd is found.
 
 ```{r}
 data <- read_csv("madrid_idealista.csv", show_col_types = FALSE) %>%
@@ -128,7 +128,7 @@ ctrl <- trainControl(method = "repeatedcv",
                      number = 5, repeats = 1)
 ```
 
-Linear regression
+#### Linear regression
 
 ```{r}
 linear_cv <- train(variables1, 
@@ -143,12 +143,11 @@ linear_cv
 summary(linear_cv)
 ```
 
-Prediction - linear
+- Storage of *linear* results:
 
 ```{r}
 results$lm <- predict(linear_cv, testing)
 linear_m <- postResample(pred = results$lm,  obs = results$price)
-linear_m
 ```
 
 ```{r}
@@ -159,27 +158,30 @@ ggplot(data = results, aes(x = lm, y = price_sq_m)) +
   theme_bw()
 ```
 
-KNN
+#### KNN
 
 ```{r}
 knn <- train(variables1, 
              data = training,
              method = "kknn", # k-Nearest Neighbors algorithm
              preProc=c('scale','center'), # all variables in the same scale and mean = 0
-             tuneGrid = data.frame(kmax=c(6,13,15,19,21),distance=2,kernel='optimal'), # kmax = maximum value of k to be considered in the k - Nearest Neighbors algorithm
+             tuneGrid = data.frame(kmax=c(6,13,15,19,21), distance=2, kernel='optimal'), # kmax = maximum value of k to be considered in the k - Nearest Neighbors algorithm (number of neighbours considered)
              # Distance = 2 = Euclidean Distance
              trControl = ctrl,
              importance = TRUE)
 plot(knn)
 ```
 
+Plot of KNN results shows that RMSE is the lowest when introducing a number of neighbours near 20. 
+
+- Storage of *KNN* results:
+
 ```{r}
 results$knn <- predict(knn, testing)
 knn_m <- postResample(pred = results$knn,  obs = results$price_sq_m)
-
 ```
 
-Random Forest
+#### Random Forest
 
 ```{r}
 rforest <- train(variables1, 
@@ -188,16 +190,23 @@ rforest <- train(variables1,
                  preProc=c('scale','center'),
                  trControl = ctrl,
                  ntree = 100,
-                 tuneGrid = data.frame(mtry=c(1,9,18,27)), # esto es lo de randomly selected predictors, en nuestro caso podría ser c(1, 9, 18, 27) había 1, 3, 5, 7
+                 tuneGrid = data.frame(mtry=c(1,9,18,27)), # randomly selected predictors
                  importance = TRUE) # variable importance measures to be computed
 
 plot(rforest)
 ```
 
 ```{r}
+print(rforest)
+```
+
+Number of optimal selected predictors by Random Forest is 18.
+
+- Storage of *Random Forest* results:
+
+```{r}
 results$rforest <- predict(rforest, testing)
 rforest_m <- postResample(pred = results$rforest,  obs = results$price_sq_m)
-varImp(rforest)
 ```
 
 ```{r}
@@ -208,7 +217,7 @@ ggplot(data = results, aes(x = rforest, y = price_sq_m)) +
   theme_bw()
 ```
 
-Gradient Boosting
+#### Gradient Boosting
 
 ```{r warning = FALSE}
 xgboost <- train(variables1, 
@@ -224,6 +233,8 @@ xgboost <- train(variables1,
                                          min_child_weight = c(1), 
                                          subsample = c(0.2,0.5,0.8)))
 ```
+
+- Storage of *Gradient Boosting* results:
 
 ```{r}
 results$xgboost <- predict(xgboost, testing)
@@ -279,11 +290,37 @@ colnames(all_results)[colnames(all_results) == "Time.to.run"] <- "Time to run"
 all_results
 ```
 
+#### Variable importance for Random Forest algorithm
+
+- Ranking of variables by importance:
+
+```{r}
+plot(varImp(rforest))
+```
+
+- Partial Dependence Plot (PDP) for the three most important variables: user can change *pred.var* argument to plot the desired PDP. 
+
+```{r}
+partial(rforest, pred.var = "lat", plot = TRUE, rug = TRUE)
+```
+
+```{r}
+partial(rforest, pred.var = "n_room", plot = TRUE, rug = TRUE)
+```
+
+```{r}
+partial(rforest, pred.var = "n_dwelling", plot = TRUE, rug = TRUE)
+```
+
+## 5. CONCLUSIONS
+No code
+
+
 ## REFERENCES
 
 Datahippo. (2018). Datahippo.org. Madrid (Provincia): Datos básicos Airbnb. Retrieved April 17, 2023, from https://datahippo.org/es/region/599230b08a46554edf88466b/
 
-Expansion.com. (2019). Euribor 2018 - Histórico Euribor 2018. Datosmacro. Retrieved April 21, 2023, from https://datosmacro.expansion.com/hipotecas/euribor?anio=2018
+Expansion.com. (2019). Historical Euribor 2018. Datosmacro. Retrieved April 21, 2023, from https://datosmacro.expansion.com/hipotecas/euribor?anio=2018
 
 Medina M. (2023). R Programming. University Carlos III of Madrid.
 

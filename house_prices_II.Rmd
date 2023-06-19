@@ -3,7 +3,6 @@ title: "TFM"
 author: "Maria del Mar Escalas Martorell"
 date: "`r Sys.Date()`"
 output: html_document
-description: "This is the second .Rmd document from a set of three .Rdm. Code provided is complemetary to the main document containing the Master's Thesis in *Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market*, which can be found in this repository. This markdown contains the code needed for conducting the analysis of point 3. DATA EXTRACTION AND PREPROCESSING."
 ---
 
 ```{r setup, include=FALSE}
@@ -840,6 +839,7 @@ variations <- exploratory %>%
   group_by(id) %>%
   summarise(price_min = min(price_sq_m),
             price_max = max(price_sq_m),
+            absolute_variation = (price_max - price_min),
             price_variation = ((price_max - price_min)/price_min)*100)
 
 variations
@@ -850,6 +850,13 @@ Average variation in the price of a square meter.
 ```{r}
 sum(is.na(variations$price_variation))
 mean(variations$price_variation)
+```
+
+```{r}
+str(variations)
+ggplot(variations, aes(x = absolute_variation)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "skyblue") +
+  labs(x = "Price Variation", y = "Count", title = "Histogram of Price Variation") + theme_minimal()
 ```
 
 Orientation: dwellings with no location.
@@ -873,11 +880,13 @@ mean(exploratory_orientation$year_built)
 
 CSSLab UC3M (2023). Data Visualization: Principles and Practice. Retrieved April 4, 2023, from https://csslab.uc3m.es/dataviz/
 
-Expansion.com. (January, 2019). Euribor 2018 - Histórico Euribor 2018. Datosmacro. Retrieved April 21, 2023, from https://datosmacro.expansion.com/hipotecas/euribor?anio=2018
+Expansion.com. (2019). Historical Euribor 2018. Datosmacro. Retrieved April 21, 2023, from https://datosmacro.expansion.com/hipotecas/euribor?anio=2018
 
 Cimentada, J. (2023). Data Harvesting with R. Retrieved March 29, 2023, from https://cimentadaj.github.io/dataharvesting/
 
 Datahippo. (2018, October 1). Datahippo.org. Madrid (Provincia): Datos básicos Airbnb. Retrieved April 17, 2023, from https://datahippo.org/es/region/599230b08a46554edf88466b/
+
+Medina M. (2023). R Programming. University Carlos III of Madrid.
 
 Open Data Portal of Madrid City Council. (2023). Educational centers in Madrid. Retrieved May 3, 2023, from https://datos.madrid.es/sites/v/index.jsp?vgnextoid=f14878a6d4556810VgnVCM1000001d4a900aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD
 
@@ -885,4 +894,4 @@ Open Data Portal of Madrid City Council. (2023). Main parks and municipal garden
 
 Open Data Portal of Madrid City Council. (2023). Medical care centers in Madrid. Retrieved May 3, 2023, from https://datos.madrid.es/sites/v/index.jsp?vgnextoid=da7437ac37efb410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD
 
-Rey-Blanco D., Arbues P., Lopez F., Paez A. (2021). idealista18: Idealista 2018 Data Package. R package version 0.1.1. URL: https://paezha.github.io/idealista18/
+Rey-Blanco D., Arbués P., Lopez F., Páez A. (2021). idealista18: Idealista 2018 Data Package. R package version 0.1.1. URL: https://paezha.github.io/idealista18/
