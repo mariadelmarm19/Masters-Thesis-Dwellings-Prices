@@ -16,7 +16,7 @@ Markdown structure is the following:
 - [house_prices_II.Rmd](house_prices_II.Rmd) corresponds to section **3. DATA EXTRACTION AND PREPROCESSING**
 - [house_prices_III.Rmd](house_prices_III.Rmd) corresponds to sections **4. MODELLING** and **5. CONCLUSIONS**
 
-The user will also find associated .html files.
+The user will also find associated .html files for *house_prices_I.Rmd* and *house_prices_II.Rmd*. For the third case it has not been possible due to computational limitations of my computer.
 
 ## File structure
 In this repository the reader can find all necessary files to read and run the project.
