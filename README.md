@@ -14,7 +14,7 @@ Markdown structure is the following:
 
 - [house_prices_I.Rmd](house_prices_I.Rmd) corresponds to sections **1. INTRODUCTION** and **2. ANALYSIS OF THE SITUATION**
 - [house_prices_II.Rmd](house_prices_II.Rmd) corresponds to section **3. DATA EXTRACTION AND PREPROCESSING**
-- [house_prices_III.Rmd](house_prices_III.Rmd) corresponds to sections **4. MODELLING** and **5.CONCLUSIONS**
+- [house_prices_III.Rmd](house_prices_III.Rmd) corresponds to sections **4. MODELLING** and **5. CONCLUSIONS**
 
 The user will also find associated .html files.
 
