@@ -1,5 +1,5 @@
 # Forecasting dwelling prices in the City of Madrid: a comprehensive analysis of the Real Estate market
-This repository has been created to store my Master's Thesis work as a student of Master in Computational Social Science in Universidad Carlos III de Madrid.
+This repository has been created to store my Master's Thesis work as a student of Master in Computational Social Science in University Carlos III of Madrid.
 
 ## Project description
 This project is about the Real Estate market prices in the area of Madrid City. The idea is to make an introduction of the situation that motivates the work and then incorporate some external variables to try to enhance predictive power. Finally, it is desired to find out a tool which allows to predict well prices.
@@ -14,7 +14,8 @@ Markdown structure is the following:
 
 - [house_prices_I.Rmd](house_prices_I.Rmd) corresponds to sections **1. INTRODUCTION** and **2. ANALYSIS OF THE SITUATION**
 - [house_prices_II.Rmd](house_prices_II.Rmd) corresponds to section **3. DATA EXTRACTION AND PREPROCESSING**
-- [house_prices_III.Rmd](house_prices_III.Rmd) corresponds to section **4. MODELLING**
+- [house_prices_III.Rmd](house_prices_III.Rmd) corresponds to sections **4. MODELLING** and **5.CONCLUSIONS**
+
 The user will also find associated .html files.
 
 ## File structure
